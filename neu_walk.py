@@ -23,14 +23,12 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     img3ds.SetOrigin((0,0,0))
     img3ds.SetSpacing((1,1,1))
     img3ds.SetDirection((1,0,0, 0,1,0, 0,0,1))
-    # use resampling filter to get the normal-plane image
+
+    sz = (img3d.shape[0], img3d.shape[1], 1)
     trfm = sitk.Transform()  # default to identity
-    # trfm.SetParameters((1, 0, 0, 0, 1, 0, 0, 0, 1, p_center[0], p_center[1], p_center[2]))
-    sz = img3d.shape
-    sz = (sz[0], sz[1], 1)
+
     out_origin = p_center
     out_spacing = (1, 1, 1)
-    #outDirection = (1, 0, 0, 0, 1, 0, 0, 0, 1)
     vec_normal = vec_normal / norm(vec_normal)   # let the devided-by-zero raise error
     vec_up = vec_up / norm(vec_up)
     vec_x = np.cross(vec_up, vec_normal)
@@ -39,11 +37,12 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     out_direction = _a([vec_x, vec_y, vec_normal]).T.flatten(order='C')
     # shift out_origin from image corner to center
     out_origin = out_origin - vec_x * sz[0] / 2 - vec_y * sz[1] / 2
-    print(out_origin)
-    print(out_direction)
+
+    # use resampling filter to get the normal-plane image
     img_normal = sitk.Resample(img3ds, sz, trfm, sitk.sitkLinear,
                                out_origin, out_spacing, out_direction,
                                10000, sitk.sitkUInt16)
+    
     # convert the image to numpy array
     img_normal = sitk.GetArrayFromImage(img_normal)
     img_normal = img_normal[0, :, :]
