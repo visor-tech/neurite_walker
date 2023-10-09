@@ -28,19 +28,21 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     # trfm.SetParameters((1, 0, 0, 0, 1, 0, 0, 0, 1, p_center[0], p_center[1], p_center[2]))
     sz = img3d.shape
     sz = (sz[0], sz[1], 1)
-    outOrigin = p_center
-    outSpacing = (1, 1, 1)
+    out_origin = p_center
+    out_spacing = (1, 1, 1)
     #outDirection = (1, 0, 0, 0, 1, 0, 0, 0, 1)
     vec_normal = vec_normal / norm(vec_normal)   # let the devided-by-zero raise error
     vec_up = vec_up / norm(vec_up)
     vec_x = np.cross(vec_up, vec_normal)
     vec_y = np.cross(vec_normal, vec_x)
-    outDirection = _a([vec_x, vec_y, vec_normal]).flatten(order='C')
-    print(outOrigin)
-    print(outDirection)
+    out_direction = _a([vec_x, vec_y, vec_normal]).flatten(order='C')
+    # shift out_origin from image corner to center
+    out_origin = out_origin - vec_x * sz[0] / 2 - vec_y * sz[1] / 2
+    print(out_origin)
+    print(out_direction)
     img_normal = sitk.Resample(img3ds, sz, trfm, sitk.sitkLinear,
-                               outOrigin, outSpacing, outDirection,
-                               0, sitk.sitkUInt16)
+                               out_origin, out_spacing, out_direction,
+                               10000, sitk.sitkUInt16)
     # convert the image to numpy array
     img_normal = sitk.GetArrayFromImage(img_normal)
     img_normal = img_normal[0, :, :]
@@ -75,6 +77,7 @@ if __name__ == '__main__':
 
     # set the center point and normal vector
     p_center   = _a([30, 90, 40])
+    #p_center   = _a([0, 0, 40])
     vec_normal = _a([0, 0, 1])  # vectors always follow (x,y,z)
     vec_up     = _a([0, 1, 0])
     #vec_normal = _a([0, 0, 1])  # vectors always follow (x,y,z)
@@ -88,6 +91,6 @@ if __name__ == '__main__':
 
     plt.figure(10)
     # rescale the image by min and max
-    img_normal = (img_normal - img_normal.min()) / (img_normal.max() - img_normal.min())
+    #img_normal = (img_normal - img_normal.min()) / (img_normal.max() - img_normal.min())
     plt.imshow(img_normal, cmap='gray', origin='lower')
     plt.show()
