@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.linalg import norm
 import tifffile
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
@@ -27,9 +28,16 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     # trfm.SetParameters((1, 0, 0, 0, 1, 0, 0, 0, 1, p_center[0], p_center[1], p_center[2]))
     sz = img3d.shape
     sz = (sz[0], sz[1], 1)
-    outOrigin = (0, 0, 0)
+    outOrigin = p_center
     outSpacing = (1, 1, 1)
-    outDirection = (1, 0, 0, 0, 1, 0, 0, 0, 1)
+    #outDirection = (1, 0, 0, 0, 1, 0, 0, 0, 1)
+    vec_normal = vec_normal / norm(vec_normal)   # let the devided-by-zero raise error
+    vec_up = vec_up / norm(vec_up)
+    vec_x = np.cross(vec_up, vec_normal)
+    vec_y = np.cross(vec_normal, vec_x)
+    outDirection = _a([vec_x, vec_y, vec_normal]).flatten(order='C')
+    print(outOrigin)
+    print(outDirection)
     img_normal = sitk.Resample(img3ds, sz, trfm, sitk.sitkLinear,
                                outOrigin, outSpacing, outDirection,
                                0, sitk.sitkUInt16)
@@ -38,23 +46,45 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     img_normal = img_normal[0, :, :]
     return img_normal
 
+def ShowThreeViews(img3d, p_center):
+    plt.figure(9)
+    # fixed z, facing -z, draw x-y plane (horizontal, vertical)
+    plt.imshow(img3d[int(p_center[2]), :, :], cmap='gray', origin='lower')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title(f"z = {int(p_center[2])}")
+
+    plt.figure(8)
+    # x fixed, facing -x, draw y-z plane
+    plt.imshow(img3d[:, :, int(p_center[0])], cmap='gray', origin='lower')
+    plt.xlabel('y')
+    plt.ylabel('z')
+    plt.title(f"x = {int(p_center[0])}")
+
+    plt.figure(7)
+    # y fixed, facing y, draw x-z plane
+    plt.imshow(img3d[:, int(p_center[1]), :], cmap='gray', origin='lower')
+    plt.xlabel('x')
+    plt.ylabel('z')
+    plt.title(f"y = {int(p_center[1])}")
+
 if __name__ == '__main__':
     # load the 3D image
     tif_path = "/home/xyy/code/py/neurite_walker/52224-30976-56064.tif"
     img3d = tifffile.imread(tif_path)
 
     # set the center point and normal vector
-    p_center   = _a([0, 0, 0])
+    p_center   = _a([30, 90, 40])
     vec_normal = _a([0, 0, 1])  # vectors always follow (x,y,z)
     vec_up     = _a([0, 1, 0])
+    #vec_normal = _a([0, 0, 1])  # vectors always follow (x,y,z)
+    #vec_up     = _a([0, 1, 0])
     # get the normal-plane image
     img_normal = NormalSlice3DImage(img3d, p_center, vec_normal, vec_up)
 
-    # show the normal-plane image by matplotlib
+    # show the reference image
     #plt.ion()
-    plt.figure(9)
-    # reference image at z==0, facing -z direction, with horizon-x, vertial-y axis.
-    plt.imshow(img3d[0,:,:], cmap='gray', origin='lower')
+    ShowThreeViews(img3d, p_center)
 
     plt.figure(10)
     # rescale the image by min and max
