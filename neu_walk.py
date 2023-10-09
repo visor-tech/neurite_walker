@@ -35,7 +35,8 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     vec_up = vec_up / norm(vec_up)
     vec_x = np.cross(vec_up, vec_normal)
     vec_y = np.cross(vec_normal, vec_x)
-    out_direction = _a([vec_x, vec_y, vec_normal]).flatten(order='C')
+    # row-major order, but vectors are column vectors
+    out_direction = _a([vec_x, vec_y, vec_normal]).T.flatten(order='C')
     # shift out_origin from image corner to center
     out_origin = out_origin - vec_x * sz[0] / 2 - vec_y * sz[1] / 2
     print(out_origin)
@@ -77,9 +78,8 @@ if __name__ == '__main__':
 
     # set the center point and normal vector
     p_center   = _a([30, 90, 40])
-    #p_center   = _a([0, 0, 40])
-    vec_normal = _a([0, 0, 1])  # vectors always follow (x,y,z)
-    vec_up     = _a([0, 1, 0])
+    vec_normal = _a([1, 0, 0])  # vectors always follow (x,y,z)
+    vec_up     = _a([0, 0, 1])
     #vec_normal = _a([0, 0, 1])  # vectors always follow (x,y,z)
     #vec_up     = _a([0, 1, 0])
     # get the normal-plane image
