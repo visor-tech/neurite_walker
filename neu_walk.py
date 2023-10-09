@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.append('/home/xyy/code/py/vtk_test/')
 from neu3dviewer.data_loader import (
-    LoadSWCTree, SplitSWCTree, SWCDFSSort, SWCNodeRelabel, GetUndirectedGraph
+    LoadSWCTree, SplitSWCTree, SWCDFSSort, SWCNodeRelabel, GetUndirectedGraph,
+    OnDemandVolumeLoader
 )
 
 _a  = lambda x: np.array(x, dtype=np.float64)
@@ -51,55 +52,12 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     # use resampling filter to get the normal-plane image
     img_normal = sitk.Resample(img3ds, sz, trfm, sitk.sitkLinear,
                                out_origin, out_spacing, out_direction,
-                               10000, sitk.sitkUInt16)
+                               0, sitk.sitkUInt16)
     
     # convert the image to numpy array
     img_normal = sitk.GetArrayFromImage(img_normal)
     img_normal = img_normal[0, :, :]
     return img_normal
-
-def WalkTreeTrial(swc_path, image_block_path):
-    # get an ordered and continuous node index tree and its graph
-    ntree = LoadSWCTree(swc_path)
-    processes = SplitSWCTree(ntree)
-    ntree, processes = SWCDFSSort(ntree, processes)
-    tr_idx = SWCNodeRelabel(ntree)
-    ntree = (tr_idx, ntree[1])
-    ngraph = GetUndirectedGraph(ntree)
-
-    node_idx = 1936
-
-    # show node position and neighbor indices
-    print(ntree[0][node_idx, :], ntree[1][node_idx, :])
-    print(ngraph[node_idx].indices)
-
-    neig_node_idx = ngraph[node_idx].indices
-    # use SVD to get axis
-    # neighbor point positions
-    neig_pos = ntree[1][_ai(list(neig_node_idx)+[node_idx]), :3]
-    print(neig_pos)
-    u, s, vt = np.linalg.svd(neig_pos - neig_pos.mean(axis=0), full_matrices=True)
-
-    p_focused = ntree[1][node_idx, :3]
-    p_img_center = p_focused
-
-    desired_block_size = (128, 128, 128)
-
-    # load image around p_img_center
-    imgz = zarr.open(image_block_path, mode='r')
-    print(p_img_center)
-    p_img_corner = p_img_center - _a(desired_block_size) / 2
-    idx_rg = [slice(int(p_img_corner[i]),
-                    int(p_img_corner[i] + desired_block_size[i]))
-              for i in range(3)]
-    print(idx_rg)
-    img3d = imgz[*idx_rg]
-
-    print(p_img_center)
-    print(img3d.shape)
-    print(neig_pos[-1])
-
-    img_tangent = NormalSlice3DImage(img3d, neig_pos[-1], vt[2], -u[1])
 
 def ShowThreeViews(img3d, p_center):
     plt.figure(9)
@@ -122,6 +80,93 @@ def ShowThreeViews(img3d, p_center):
     plt.xlabel('x')
     plt.ylabel('z')
     plt.title(f"y = {int(p_center[1])}")
+
+def ShowThreeViewsMIP(img3d):
+    plt.figure(9)
+    # facing -z, draw x-y plane (horizontal, vertical)
+    plt.imshow(img3d.max(axis=0), cmap='gray', origin='lower')
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.title("MIP")
+
+    plt.figure(8)
+    # facing -x, draw y-z plane
+    plt.imshow(img3d.max(axis=2), cmap='gray', origin='lower')
+    plt.xlabel('y')
+    plt.ylabel('z')
+    plt.title("MIP")
+
+    plt.figure(7)
+    # facing y, draw x-z plane
+    plt.imshow(img3d.max(axis=1), cmap='gray', origin='lower')
+    plt.xlabel('x')
+    plt.ylabel('z')
+    plt.title("MIP")
+
+def WalkTreeTrial(swc_path, image_block_path):
+    # get an ordered and continuous node index tree and its graph
+    ntree = LoadSWCTree(swc_path)
+    processes = SplitSWCTree(ntree)
+    ntree, processes = SWCDFSSort(ntree, processes)
+    tr_idx = SWCNodeRelabel(ntree)
+    ntree = (tr_idx, ntree[1])
+    ngraph = GetUndirectedGraph(ntree)
+
+    node_idx = 1936
+
+    # show node position and neighbor indices
+    print(ntree[0][node_idx, :], ntree[1][node_idx, :3])
+    print(ngraph[node_idx].indices)
+
+    neig_node_idx = ngraph[node_idx].indices
+    # use SVD to get axis
+    # neighbor point positions
+    neig_pos = ntree[1][_ai(list(neig_node_idx)+[node_idx]), :3]
+    print(neig_pos)
+    u, s, vt = np.linalg.svd(neig_pos - neig_pos.mean(axis=0), full_matrices=True)
+
+    p_focused = ntree[1][node_idx, :3]
+    p_img_center = p_focused
+
+    desired_block_size = (128, 128, 128)
+
+    # load image around p_img_center
+    imgz = zarr.open(image_block_path, mode='r')
+    #p_img_corner = p_img_center - _a(desired_block_size) / 2
+    # align to 128 boundary
+    p_img_corner = np.floor(p_img_center / 128) * 128
+    #p_img_corner += _a([52.9, 49.6, -15])
+    #p_img_corner = p_img_center - _a([49, 113.6, 116.9])
+    #p_img_corner = p_img_center - _a([0, 64, 128])  # order: z, y, x
+    idx_rg = [slice(int(p_img_corner[i]),
+                    int(p_img_corner[i] + desired_block_size[i]))
+              for i in range(3)]
+    img3d = imgz[*idx_rg]
+
+    print("p_img_center", p_img_center)
+    print("p_img_corner", p_img_corner)
+
+    #ShowThreeViews(img3d, p_img_center_s)
+    ShowThreeViewsMIP(img3d)
+
+    # load by lychnis block
+    block_loader = OnDemandVolumeLoader()
+    block_lym_path = 'RM009_traced_blocks/full_set/block.lym'
+    block_loader.ImportLychnixVolume(block_lym_path)
+    vol_sel = block_loader.LoadVolumeAt(p_img_center)
+    print(vol_sel)
+    plt.figure(30)
+    img_lym = tifffile.imread(vol_sel[0]['image_path'])
+    plt.imshow(img_lym.max(axis=0), cmap='gray', origin='lower')
+    plt.title('lym')
+
+    # substract every coor by p_img_corner to align to the image
+    #p_img_center_s = p_img_center - p_img_corner
+
+    #img_tangent = NormalSlice3DImage(img3d, p_img_center_s, vt[2], -u[1])
+
+    #plt.figure(20)
+    #plt.imshow(img_tangent, cmap='gray', origin='lower')
 
 def Test3dImageSlicing():
     # load the 3D image
@@ -158,4 +203,9 @@ if __name__ == '__main__':
     swc_path = 'neuron#255.lyp.swc'
     #block_lym_path = 'RM009_traced_blocks/full_set/block.lym'
     img_block_path = '/mnt/xiaoyy/dataset/zarrblock'
+    
+    plt.ion()
+
     WalkTreeTrial(swc_path, img_block_path)
+
+    plt.show()
