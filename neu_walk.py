@@ -134,10 +134,12 @@ def WalkTreeTrial(swc_path, image_block_path):
     imgz = zarr.open(image_block_path, mode='r')
     #p_img_corner = p_img_center - _a(desired_block_size) / 2
     # align to 128 boundary
-    p_img_corner = np.floor(p_img_center / 128) * 128
+    #p_img_corner = np.floor(p_img_center / 128) * 128
     #p_img_corner += _a([52.9, 49.6, -15])
     #p_img_corner = p_img_center - _a([49, 113.6, 116.9])
     #p_img_corner = p_img_center - _a([0, 64, 128])  # order: z, y, x
+    # indep
+    p_img_corner = p_img_center - _a([49, 113.6, 116.9]) + _a([0, 50, 0])
     idx_rg = [slice(int(p_img_corner[i]),
                     int(p_img_corner[i] + desired_block_size[i]))
               for i in range(3)]
@@ -145,6 +147,7 @@ def WalkTreeTrial(swc_path, image_block_path):
 
     print("p_img_center", p_img_center)
     print("p_img_corner", p_img_corner)
+    print("diff", p_img_center - p_img_corner)
 
     #ShowThreeViews(img3d, p_img_center_s)
     ShowThreeViewsMIP(img3d)
