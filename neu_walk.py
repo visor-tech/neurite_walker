@@ -238,17 +238,6 @@ def WalkTreeTrial(swc_path, image_block_path):
 
     node_idx = 1936
 
-    # show node position and neighbor indices
-    print(ntree[0][node_idx, :], ntree[1][node_idx, :3])
-    print(ngraph[node_idx].indices)
-
-    neig_node_idx = ngraph[node_idx].indices
-    # use SVD to get axis
-    # neighbor point positions
-    neig_pos = ntree[1][_ai(list(neig_node_idx)+[node_idx]), :3]
-    print(neig_pos)
-    u, s, vt = np.linalg.svd(neig_pos - neig_pos.mean(axis=0), full_matrices=True)
-
     p_focused = ntree[1][node_idx, :3]
     p_img_center = p_focused
 
@@ -258,12 +247,12 @@ def WalkTreeTrial(swc_path, image_block_path):
     # load image around p_img_center
     imgz = zarr.open(image_block_path, mode='r')
 
-    #p_img_corner = p_img_center - _a(desired_block_size) / 2
+    p_img_corner = p_img_center - _a(desired_block_size) / 2
 
-    p_img_corner = p_img_center.copy()
-    p_img_corner[0] = np.floor(p_img_center[0] / 128) * 128
-    p_img_corner[1] = p_img_center[1] - 128 / 2
-    p_img_corner[2] = p_img_center[2] - 128 / 2
+    #p_img_corner = p_img_center.copy()
+    #p_img_corner[0] = np.floor(p_img_center[0] / 128) * 128
+    #p_img_corner[1] = p_img_center[1] - 128 / 2
+    #p_img_corner[2] = p_img_center[2] - 128 / 2
 
     # align to 128 boundary
     #p_img_corner = np.floor(p_img_center / 128) * 128
@@ -294,13 +283,26 @@ def WalkTreeTrial(swc_path, image_block_path):
     ylabel('z')
     title('lym block')
 
+    ## try to show a (primary) tangent plane
+
+    # show node position and neighbor indices
+    print(ntree[0][node_idx, :], ntree[1][node_idx, :3])
+    print(ngraph[node_idx].indices)
+
+    neig_node_idx = ngraph[node_idx].indices
+    # use SVD to get axis
+    # neighbor point positions
+    neig_pos = ntree[1][_ai(list(neig_node_idx)+[node_idx]), :3]
+    print(neig_pos)
+    u, s, vt = np.linalg.svd(neig_pos - neig_pos.mean(axis=0), full_matrices=True)
+
     # substract every coor by p_img_corner to align to the image
-    #p_img_center_s = p_img_center - p_img_corner
+    p_img_center_s = p_img_center - p_img_corner
 
-    #img_tangent = NormalSlice3DImage(img3d, p_img_center_s, vt[2], -u[1])
+    img_tangent = NormalSlice3DImage(img3d, p_img_center_s, vt[2], vt[1])
 
-    #figure(20)
-    #imgshow(img_tangent)
+    figure(20)
+    imgshow(img_tangent.T)
 
 def Test3dImageSlicing():
     # load the 3D image
