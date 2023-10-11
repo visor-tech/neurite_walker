@@ -22,7 +22,8 @@ from neu3dviewer.data_loader import (
 
 _a  = lambda x: np.array(x, dtype=np.float64)
 _ai = lambda x: np.array(x, dtype=int)
-imgshow = lambda im: plt.imshow(im, cmap='gray', origin='lower')
+f_l_gamma = lambda a, g: np.uint16(((np.float64(a) - a.min()) / (a.max()-a.min())) **(1/g) * (a.max()-a.min()) + a.min())
+imgshow = lambda im: plt.imshow(f_l_gamma(im, 3.0), cmap='gray', origin='lower')
 
 def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     """
@@ -34,9 +35,10 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     return img_normal: numpy array, the normal-plane image
     """
 
+    # input index order is [x,y,z]
     # convert the image to sitk image
-    # note that the index ordering is changed from [z,y,x] to [x,y,z]
-    img3ds = sitk.GetImageFromArray(img3d)
+    # note that there is a transpose in GetImageFromArray
+    img3ds = sitk.GetImageFromArray(img3d.T)
     img3ds.SetOrigin((0,0,0))
     img3ds.SetSpacing((1,1,1))
     img3ds.SetDirection((1,0,0, 0,1,0, 0,0,1))
@@ -62,10 +64,14 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     
     # convert the image to numpy array
     img_normal = sitk.GetArrayFromImage(img_normal)
-    img_normal = img_normal[0, :, :]
+    img_normal = img_normal[0, :, :].T
     return img_normal
 
 def ShowThreeViews(img3d, p_center):
+    # input (x,y,z) order
+    img3d = img3d.T
+    # now in (z,y,x) order
+
     figure(9)
     # fixed z, facing -z, draw x-y plane (horizontal, vertical)
     imgshow(img3d[int(p_center[2]), :, :])
@@ -88,6 +94,10 @@ def ShowThreeViews(img3d, p_center):
     title(f"y = {int(p_center[1])}")
 
 def ShowThreeViewsMIP(img3d):
+    # input (x,y,z) order
+    img3d = img3d.T
+    # now in (z,y,x) order
+
     figure(9)
     # facing -z, draw x-y plane (horizontal, vertical)
     imgshow(img3d.max(axis=0))
@@ -110,6 +120,8 @@ def ShowThreeViewsMIP(img3d):
     title("MIP")
 
 def ExamBigImageContinuity():
+    ### used in "order":"C" era
+
     p0 = _a([52785, 28145.6, 55668.9])
     p_corner = np.floor(p0 / 128) * 128
     img_block_path = '/mnt/xiaoyy/dataset/zarrblock'
@@ -117,8 +129,6 @@ def ExamBigImageContinuity():
     idf_pb = lambda p, b: (slice(int(p[i]), int(p[i] + b[i]))
                             for i in range(3))
     block_size = _a([128, 128, 128])
-
-    f_l_gamma = lambda a, g: np.uint16(((np.float64(a) - a.min()) / (a.max()-a.min())) **(1/g) * (a.max()-a.min()) + a.min())
 
     ## test direction of imshow
     # consider (z,y,x)
@@ -196,6 +206,8 @@ def ExamBigImageContinuity():
     # good
 
     figure(135)
+    # in .zarray
+    #"order": "C",
     imgshow(f_l_gamma(
         imgz[*idf_pb(p_corner, (128, 256, 256))] \
         .max(axis=0).T, 3.0))
@@ -207,9 +219,15 @@ def ExamBigImageContinuity():
     # Results above seems consistent:
     #   The small block in zarr is in (z,y,x) order
     #   But the indexing for zarr is in (x,y,z) order
-
+    # Solution 1: always fetch zarr array in block, and transpose the result
+    # Solution 2: rewrite the zarr array block to (x,y,z) order
+    # Solution 3: tuning the .zarry configuration, set the order:C to F.
+    # Adopt solution 3.
 
 def WalkTreeTrial(swc_path, image_block_path):
+    
+    ## prepare fiber position
+
     # get an ordered and continuous node index tree and its graph
     ntree = LoadSWCTree(swc_path)
     processes = SplitSWCTree(ntree)
@@ -234,21 +252,26 @@ def WalkTreeTrial(swc_path, image_block_path):
     p_focused = ntree[1][node_idx, :3]
     p_img_center = p_focused
 
+    ## prepare image
     desired_block_size = (128, 128, 128)
 
     # load image around p_img_center
     imgz = zarr.open(image_block_path, mode='r')
+
     #p_img_corner = p_img_center - _a(desired_block_size) / 2
+
+    p_img_corner = p_img_center.copy()
+    p_img_corner[0] = np.floor(p_img_center[0] / 128) * 128
+    p_img_corner[1] = p_img_center[1] - 128 / 2
+    p_img_corner[2] = p_img_center[2] - 128 / 2
+
     # align to 128 boundary
     #p_img_corner = np.floor(p_img_center / 128) * 128
-    #p_img_corner += _a([52.9, 49.6, -15])
-    #p_img_corner = p_img_center - _a([49, 113.6, 116.9])
-    #p_img_corner = p_img_center - _a([0, 64, 128])  # order: z, y, x
-    # indep
-    p_img_corner = p_img_center - _a([49, 113.6, 116.9]) + _a([0, 50, 0])
+
     idx_rg = [slice(int(p_img_corner[i]),
                     int(p_img_corner[i] + desired_block_size[i]))
               for i in range(3)]
+
     img3d = imgz[*idx_rg]
 
     print("p_img_center", p_img_center)
@@ -265,10 +288,10 @@ def WalkTreeTrial(swc_path, image_block_path):
     vol_sel = block_loader.LoadVolumeAt(p_img_center)
     print(vol_sel)
     figure(30)
-    img_lym = tifffile.imread(vol_sel[0]['image_path'])
-    imgshow(img_lym.max(axis=0))
-    xlabel('x')
-    ylabel('y')
+    img_lym = tifffile.imread(vol_sel[0]['image_path']).T
+    imgshow(img_lym.max(axis=0).T)
+    xlabel('y')
+    ylabel('z')
     title('lym block')
 
     # substract every coor by p_img_corner to align to the image
@@ -282,7 +305,7 @@ def WalkTreeTrial(swc_path, image_block_path):
 def Test3dImageSlicing():
     # load the 3D image
     tif_path = "/home/xyy/code/py/neurite_walker/52224-30976-56064.tif"
-    img3d = tifffile.imread(tif_path)
+    img3d = tifffile.imread(tif_path).T
 
     # set the center point and normal vector
     p_center   = _a([30, 90, 40])
@@ -300,7 +323,8 @@ def Test3dImageSlicing():
     figure(10)
     # rescale the image by min and max
     #img_normal = (img_normal - img_normal.min()) / (img_normal.max() - img_normal.min())
-    imgshow(img_normal)
+    imgshow(img_normal.T)
+    title(f'slice: cen{p_center}, nor{vec_normal}, up{vec_up}')
     plt.show()
 
 if __name__ == '__main__':
