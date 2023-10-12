@@ -84,7 +84,15 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
 
 def SliceZarrImage(zarr_image, p_center, vec_normal, vec_up):
     size = 128
-    img3d = zarr_image[*_idx_blk(p_center - size/2, size)]
+    p0 = p_center - size/2
+    img3d = zarr_image[*_idx_blk(p0, size)]
+    print('idx =', tuple(_idx_blk(p_center - size/2, size)))
+    print('maxmin =', np.max(img3d), np.min(img3d))
+    print('p_center =', p_center)
+    print('vec_normal =', vec_normal)
+    print('vec_up =', vec_up)
+    #tifffile.imwrite('a.tif', img3d.T)
+    p_center = p_center - p0
     simg = NormalSlice3DImage(img3d, p_center, vec_normal, vec_up)
     return simg
 
@@ -411,11 +419,12 @@ def WalkProcessNormalMIP(process_pos, image_block_path):
     p, dp, ddp = curve.PointTangentNormal(t_interp[k])
     p, frame = curve.FrenetFrame(t_interp[k])
 
+    print('p =', p)
+
     # get the normal-plane image
     zimg = zarr.open(image_block_path, mode='r')
     simg = SliceZarrImage(zimg, p, frame[2], frame[1])
 
-    print(np.max(simg), np.min(simg))
     
     figure(201)
     imgshow(simg.T)
