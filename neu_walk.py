@@ -6,10 +6,14 @@
 #%autoreload 2
 
 import numpy as np
+from numpy import diff
 from numpy.linalg import norm
+import scipy.interpolate as interpolate
+
 import tifffile
 import SimpleITK as sitk
 import zarr
+
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import xlabel, ylabel, title, figure
 
@@ -22,6 +26,8 @@ from neu3dviewer.data_loader import (
 
 _a  = lambda x: np.array(x, dtype=np.float64)
 _ai = lambda x: np.array(x, dtype=int)
+_va = lambda *a: np.vstack(a)
+_ha = lambda *a: np.hstack(a)   # concatenate along horizontal axis
 f_l_gamma = lambda a, g: np.uint16(((np.float64(a) - a.min()) / (a.max()-a.min())) **(1/g) * (a.max()-a.min()) + a.min())
 imgshow = lambda im: plt.imshow(f_l_gamma(im, 3.0), cmap='gray', origin='lower')
 
@@ -224,7 +230,7 @@ def ExamBigImageContinuity():
     # Solution 3: tuning the .zarry configuration, set the order:C to F.
     # Adopt solution 3.
 
-def WalkTreeTrial(swc_path, image_block_path):
+def WalkTreeTangent(swc_path, image_block_path, node_idx):
     
     ## prepare fiber position
 
@@ -235,8 +241,6 @@ def WalkTreeTrial(swc_path, image_block_path):
     tr_idx = SWCNodeRelabel(ntree)
     ntree = (tr_idx, ntree[1])
     ngraph = GetUndirectedGraph(ntree)
-
-    node_idx = 1936
 
     p_focused = ntree[1][node_idx, :3]
     p_img_center = p_focused
@@ -304,6 +308,96 @@ def WalkTreeTrial(swc_path, image_block_path):
     figure(20)
     imgshow(img_tangent.T)
 
+def CurveInterp(tp, rp, s = 0):
+    """Return a Interp Object of the curve passing through rp, parametrized by tp."""
+    tck = interpolate.splrep(tp, rp, s)
+
+class SmoothCurve:
+    def __init__(self, rp, s = 0):
+        """
+        Get a natural parametrization of the curve passing through rp.
+        rp is in the form [[x1,y1,z1], [x2,y2,z2], ...]
+        Ref. Smoothing splines - https://docs.scipy.org/doc/scipy/tutorial/interpolate/smoothing_splines.html
+        """
+        # Use cord length parametrization to approximate the natural parametrization
+        piece_len = norm(diff(rp, axis=0), axis=1)
+        tck, u = interpolate.splprep(rp.T, u = _ha(0, piece_len.cumsum()), s = s)
+        self.tck = tck
+        self.u = u
+
+    def __call__(self, t):
+        return interpolate.splev(t, self.tck)
+
+    def length(self):
+        return self.u[-1]
+
+    def PointTangent(self, t):
+        p = interpolate.splev(t, self.tck)
+        dp = interpolate.splev(t, self.tck, der=1)  # approximately we have ||dp|| = 1
+        dp = dp / norm(dp)
+        return p, dp
+
+    def PointTangentNormal(self, t):
+        p = interpolate.splev(t, self.tck)
+        # get tanget vector
+        dp = interpolate.splev(t, self.tck, der=1)  # approximately we have ||dp|| = 1
+        dtds = 1 / norm(dp)   # = dt / ds
+        dp = dp * dtds
+        # get normal vector
+        ddp = interpolate.splev(t, self.tck, der=2)
+        ddp = ddp * dtds**2
+        ddp = ddp - np.dot(dp, ddp) * dp
+        # the ddp is a not-normalized vector, used to determine the stength of curving.
+        return p, dp, ddp
+
+    def FrenetFrame(self, t):
+        p = interpolate.splev(t, self.tck)
+        # get tanget vector
+        dp = interpolate.splev(t, self.tck, der=1)  # approximately we have ||dp|| = 1
+        dp = dp / norm(dp)
+        # get normal vector
+        ddp = interpolate.splev(t, self.tck, der=2)
+        ddp = ddp - np.dot(dp, ddp) * dp
+        ddp = ddp / norm(ddp)
+        return p, (dp, ddp, np.cross(dp, ddp))
+
+def WalkProcessNormalMIP(process_pos, image_block_path):
+    #
+    fig = figure(200)
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot3D(process_pos[:,0], process_pos[:,1], process_pos[:,2])
+    ax.axis('equal')
+
+    # interpolation the process by a smooth curve
+    curve = SmoothCurve(process_pos)
+    p, frame = curve.GetCurveFrenetFrame(5.0)
+    print(p)
+    print(frame)
+    alen = 20
+    ax.quiver(p[0], p[1], p[2], frame[0][0], frame[0][1], frame[0][2], length=alen, color='r')
+    ax.quiver(p[0], p[1], p[2], frame[1][0], frame[1][1], frame[1][2], length=alen, color='g')
+    ax.quiver(p[0], p[1], p[2], frame[2][0], frame[2][1], frame[2][2], length=alen, color='b')
+
+def WalkTreeNormalMIP(swc_path, image_block_path):
+    # get an ordered and continuous node index tree and its graph
+    print("WalkTreeNormalMIP")
+    ntree = LoadSWCTree(swc_path)
+    processes = SplitSWCTree(ntree)
+    ntree, processes = SWCDFSSort(ntree, processes)
+    #tr_idx = SWCNodeRelabel(ntree)
+    #ntree = (tr_idx, ntree[1])
+    #ngraph = GetUndirectedGraph(ntree)
+
+    print(list(zip(range(10000), map(len, processes))))
+    selected_proc = 54
+
+    print(len(processes))
+
+    proc_coor = ntree[1][processes[selected_proc],:3]
+    proc_coor = proc_coor[0:20]
+    WalkProcessNormalMIP(proc_coor, image_block_path)
+
+
 def Test3dImageSlicing():
     # load the 3D image
     tif_path = "/home/xyy/code/py/neurite_walker/52224-30976-56064.tif"
@@ -338,11 +432,14 @@ if __name__ == '__main__':
     # Node depth: 1254
     # Path length to root: 23228.5
     swc_path = 'neuron#255.lyp.swc'
+    node_idx = 1936
     #block_lym_path = 'RM009_traced_blocks/full_set/block.lym'
     img_block_path = '/mnt/xiaoyy/dataset/zarrblock'
     
     plt.ion()
 
-    WalkTreeTrial(swc_path, img_block_path)
+    #WalkTreeTangent(swc_path, img_block_path, node_idx)
+
+    WalkTreeNormalMIP(swc_path, img_block_path)
 
     plt.show()
