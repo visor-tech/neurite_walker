@@ -418,8 +418,8 @@ def WalkProcessNormalMIP(process_pos, image_block_path):
     radius_step = 5
     n_radius = int(radius_max_soft / radius_step) + 1
 
-    # test a point
-    for idx_c_k in [3]: #range(n_interp):
+    axon_radius_mip = np.zeros((n_interp, n_radius))
+    for idx_c_k in range(n_interp):
         p, dp, ddp = curve.PointTangentNormal(t_interp[idx_c_k])
         p, frame = curve.FrenetFrame(t_interp[idx_c_k])
         print('p =', p)
@@ -454,6 +454,11 @@ def WalkProcessNormalMIP(process_pos, image_block_path):
             vals = scipy.ndimage.map_coordinates(normal_img, p_sample.T, order=3)
             print(vals)
             r_pixel_max[j] = np.max(vals)
+        
+        axon_radius_mip[idx_c_k, :] = r_pixel_max
+    
+    figure(205)
+    imgshow(axon_radius_mip.T)
     
 def WalkTreeNormalMIP(swc_path, image_block_path):
     # get an ordered and continuous node index tree and its graph
