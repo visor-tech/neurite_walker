@@ -6,8 +6,9 @@
 #%autoreload 2
 
 import numpy as np
-from numpy import diff
+from numpy import diff, sin, cos, pi, linspace
 from numpy.linalg import norm
+import scipy.ndimage
 import scipy.interpolate as interpolate
 
 import tifffile
@@ -82,15 +83,15 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     img_normal = img_normal[0, :, :].T
     return img_normal
 
-def SliceZarrImage(zarr_image, p_center, vec_normal, vec_up):
-    size = 128
-    p0 = p_center - size/2
-    img3d = zarr_image[*_idx_blk(p0, size)]
-    print('idx =', tuple(_idx_blk(p_center - size/2, size)))
-    print('maxmin =', np.max(img3d), np.min(img3d))
-    print('p_center =', p_center)
-    print('vec_normal =', vec_normal)
-    print('vec_up =', vec_up)
+def SliceZarrImage(zarr_image, blk_sz, p_center, vec_normal, vec_up):
+    blk_sz = 128
+    p0 = p_center - blk_sz/2
+    img3d = zarr_image[*_idx_blk(p0, blk_sz)]
+    #print('idx =', tuple(_idx_blk(p_center - blk_sz/2, blk_sz)))
+    #print('maxmin =', np.max(img3d), np.min(img3d))
+    #print('p_center =', p_center)
+    #print('vec_normal =', vec_normal)
+    #print('vec_up =', vec_up)
     #tifffile.imwrite('a.tif', img3d.T)
     p_center = p_center - p0
     simg = NormalSlice3DImage(img3d, p_center, vec_normal, vec_up)
@@ -331,10 +332,6 @@ def WalkTreeTangent(swc_path, image_block_path, node_idx):
     figure(20)
     imgshow(img_tangent.T)
 
-def CurveInterp(tp, rp, s = 0):
-    """Return a Interp Object of the curve passing through rp, parametrized by tp."""
-    tck = interpolate.splrep(tp, rp, s)
-
 class SmoothCurve:
     def __init__(self, rp, s = 0):
         """
@@ -409,27 +406,55 @@ def WalkProcessNormalMIP(process_pos, image_block_path):
         ax.quiver(p[0], p[1], p[2], frame[1][0], frame[1][1], frame[1][2], length=alen, color='g')
         ax.quiver(p[0], p[1], p[2], frame[2][0], frame[2][1], frame[2][2], length=alen, color='b')
 
-    # get the points to be inspected
-    t_step = 0.5
+    blk_sz = 128
+    zimg = zarr.open(image_block_path, mode='r')
+
+    # parameter for getting points to be inspected
+    t_step = 2
     n_interp = int(curve.length() / t_step) + 1
     t_interp = np.linspace(0, curve.length(), n_interp)
 
+    radius_max_soft = blk_sz / 2
+    radius_step = 5
+    n_radius = int(radius_max_soft / radius_step) + 1
+
     # test a point
-    k = 3
-    p, dp, ddp = curve.PointTangentNormal(t_interp[k])
-    p, frame = curve.FrenetFrame(t_interp[k])
+    for idx_c_k in [3]: #range(n_interp):
+        p, dp, ddp = curve.PointTangentNormal(t_interp[idx_c_k])
+        p, frame = curve.FrenetFrame(t_interp[idx_c_k])
+        print('p =', p)
 
-    print('p =', p)
+        if 1:
+            # get the normal-plane image
+            timg = SliceZarrImage(zimg, blk_sz, p, frame[2], frame[1])
+            figure(201)
+            imgshow(timg.T)
 
-    # get the normal-plane image
-    zimg = zarr.open(image_block_path, mode='r')
-    simg = SliceZarrImage(zimg, p, frame[2], frame[1])
+        normal_img = SliceZarrImage(zimg, blk_sz, p, dp, ddp)
+            
+        if 1:
+            figure(202)
+            imgshow(normal_img.T)
 
+        # construct circle sample grid
+        r_pixel_max = np.zeros(n_radius)
+        for j in range(n_radius):
+            r = radius_step * j
+            n_deg = int(2 * np.pi * r / radius_step) + 1
+            s_deg = 2*pi/n_deg * np.arange(n_deg)
+            print(s_deg.shape)
+            p_sample = r * _a([cos(s_deg), sin(s_deg)]).T + blk_sz / 2
+            print(p_sample.shape)
+            plt.scatter(p_sample[:,0], p_sample[:,1])
+
+            # interpolation in Image:
+            # See also:
+            # https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.map_coordinates.html
+            # https://discourse.itk.org/t/how-can-i-get-an-interpolated-value-between-voxels/1535/6
+            vals = scipy.ndimage.map_coordinates(normal_img, p_sample.T, order=3)
+            print(vals)
+            r_pixel_max[j] = np.max(vals)
     
-    figure(201)
-    imgshow(simg.T)
-    
-
 def WalkTreeNormalMIP(swc_path, image_block_path):
     # get an ordered and continuous node index tree and its graph
     print("WalkTreeNormalMIP")
