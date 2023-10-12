@@ -315,7 +315,7 @@ def CurveInterp(tp, rp, s = 0):
 class SmoothCurve:
     def __init__(self, rp, s = 0):
         """
-        Get a natural parametrization of the curve passing through rp.
+        Get a (approximate) natural parametrization of the curve passing through points `rp`.
         rp is in the form [[x1,y1,z1], [x2,y2,z2], ...]
         Ref. Smoothing splines - https://docs.scipy.org/doc/scipy/tutorial/interpolate/smoothing_splines.html
         """
@@ -325,39 +325,47 @@ class SmoothCurve:
         self.tck = tck
         self.u = u
 
-    def __call__(self, t):
-        return interpolate.splev(t, self.tck)
-
     def length(self):
+        """
+        Curve geometric length
+        """
         return self.u[-1]
 
+    def __call__(self, t, der = 0):
+        """
+        Return point coordinate at parameter t.
+        Optionnally return the curve derivative of order `der`.
+        """
+        t = _a(t)
+        a = _a(interpolate.splev(t, self.tck, der = der))
+        # transpose so that the last dim is the point coor
+        a = a.transpose(list(range(1,len(a.shape))) + [0])
+        return a
+
     def PointTangent(self, t):
-        p = interpolate.splev(t, self.tck)
-        dp = interpolate.splev(t, self.tck, der=1)  # approximately we have ||dp|| = 1
-        dp = dp / norm(dp)
+        p = self(t)
+        # get tanget vector
+        dp = self(t, der=1)  # approximately we have ||dp|| = 1
+        l2 = norm(dp, axis=-1)
+        dp = dp / l2.reshape(list(l2.shape)+[1])   # reshape to help auto broadcasting
         return p, dp
 
     def PointTangentNormal(self, t):
-        p = interpolate.splev(t, self.tck)
+        p = self(t)
         # get tanget vector
-        dp = interpolate.splev(t, self.tck, der=1)  # approximately we have ||dp|| = 1
+        dp = self(t, der=1)  # approximately we have ||dp|| = 1
         dtds = 1 / norm(dp)   # = dt / ds
+        dtds = dtds.reshape(list(dtds.shape)+[1])
         dp = dp * dtds
         # get normal vector
-        ddp = interpolate.splev(t, self.tck, der=2)
+        ddp = self(t, der=2)
         ddp = ddp * dtds**2
         ddp = ddp - np.dot(dp, ddp) * dp
-        # the ddp is a not-normalized vector, used to determine the stength of curving.
+        # the ddp is not a normalized vector, used to determine the stength of curving.
         return p, dp, ddp
 
     def FrenetFrame(self, t):
-        p = interpolate.splev(t, self.tck)
-        # get tanget vector
-        dp = interpolate.splev(t, self.tck, der=1)  # approximately we have ||dp|| = 1
-        dp = dp / norm(dp)
-        # get normal vector
-        ddp = interpolate.splev(t, self.tck, der=2)
-        ddp = ddp - np.dot(dp, ddp) * dp
+        p, dp, ddp = self.PointTangentNormal(t)
         ddp = ddp / norm(ddp)
         return p, (dp, ddp, np.cross(dp, ddp))
 
@@ -370,13 +378,21 @@ def WalkProcessNormalMIP(process_pos, image_block_path):
 
     # interpolation the process by a smooth curve
     curve = SmoothCurve(process_pos)
-    p, frame = curve.GetCurveFrenetFrame(5.0)
+    p, frame = curve.FrenetFrame(5.0)
     print(p)
     print(frame)
     alen = 20
     ax.quiver(p[0], p[1], p[2], frame[0][0], frame[0][1], frame[0][2], length=alen, color='r')
     ax.quiver(p[0], p[1], p[2], frame[1][0], frame[1][1], frame[1][2], length=alen, color='g')
     ax.quiver(p[0], p[1], p[2], frame[2][0], frame[2][1], frame[2][2], length=alen, color='b')
+
+    # get the normal-plane image
+    t_step = 0.5
+    n_interp = int(curve.length() / t_step) + 1
+    t_interp = np.linspace(0, curve.length(), n_interp)
+    # test a point
+    k = 3
+    p, dp, ddp = curve.PointTangentNormal(t_interp[k])
 
 def WalkTreeNormalMIP(swc_path, image_block_path):
     # get an ordered and continuous node index tree and its graph
