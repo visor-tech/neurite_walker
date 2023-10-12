@@ -24,12 +24,21 @@ from neu3dviewer.data_loader import (
     OnDemandVolumeLoader
 )
 
+# utility functions
 _a  = lambda x: np.array(x, dtype=np.float64)
 _ai = lambda x: np.array(x, dtype=int)
 _va = lambda *a: np.vstack(a)
 _ha = lambda *a: np.hstack(a)   # concatenate along horizontal axis
 f_l_gamma = lambda a, g: np.uint16(((np.float64(a) - a.min()) / (a.max()-a.min())) **(1/g) * (a.max()-a.min()) + a.min())
 imgshow = lambda im: plt.imshow(f_l_gamma(im, 3.0), cmap='gray', origin='lower')
+
+def _idx_blk(p, b):
+    q = p + b   # if p is np array, b can be a number of array
+    return (slice(int(p[k]), int(q[k]))
+            for k in range(len(p)))
+    #return (slice(int(p[0]), int(q[0])),
+    #        slice(int(p[1]), int(q[1])),
+    #        slice(int(p[2]), int(q[2])))
 
 def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     """
@@ -72,6 +81,12 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     img_normal = sitk.GetArrayFromImage(img_normal)
     img_normal = img_normal[0, :, :].T
     return img_normal
+
+def SliceZarrImage(zarr_image, p_center, vec_normal, vec_up):
+    size = 128
+    img3d = zarr_image[*_idx_blk(p_center - size/2, size)]
+    simg = NormalSlice3DImage(img3d, p_center, vec_normal, vec_up)
+    return simg
 
 def ShowThreeViews(img3d, p_center):
     # input (x,y,z) order
@@ -370,29 +385,41 @@ class SmoothCurve:
         return p, (dp, ddp, np.cross(dp, ddp))
 
 def WalkProcessNormalMIP(process_pos, image_block_path):
-    #
-    fig = figure(200)
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot3D(process_pos[:,0], process_pos[:,1], process_pos[:,2])
-    ax.axis('equal')
-
     # interpolation the process by a smooth curve
     curve = SmoothCurve(process_pos)
-    p, frame = curve.FrenetFrame(5.0)
-    print(p)
-    print(frame)
-    alen = 20
-    ax.quiver(p[0], p[1], p[2], frame[0][0], frame[0][1], frame[0][2], length=alen, color='r')
-    ax.quiver(p[0], p[1], p[2], frame[1][0], frame[1][1], frame[1][2], length=alen, color='g')
-    ax.quiver(p[0], p[1], p[2], frame[2][0], frame[2][1], frame[2][2], length=alen, color='b')
+    if 0:
+        fig = figure(200)
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot3D(process_pos[:,0], process_pos[:,1], process_pos[:,2])
+        ax.axis('equal')
 
-    # get the normal-plane image
+        p, frame = curve.FrenetFrame(5.0)
+        print(p)
+        print(frame)
+        alen = 20
+        ax.quiver(p[0], p[1], p[2], frame[0][0], frame[0][1], frame[0][2], length=alen, color='r')
+        ax.quiver(p[0], p[1], p[2], frame[1][0], frame[1][1], frame[1][2], length=alen, color='g')
+        ax.quiver(p[0], p[1], p[2], frame[2][0], frame[2][1], frame[2][2], length=alen, color='b')
+
+    # get the points to be inspected
     t_step = 0.5
     n_interp = int(curve.length() / t_step) + 1
     t_interp = np.linspace(0, curve.length(), n_interp)
+
     # test a point
     k = 3
     p, dp, ddp = curve.PointTangentNormal(t_interp[k])
+    p, frame = curve.FrenetFrame(t_interp[k])
+
+    # get the normal-plane image
+    zimg = zarr.open(image_block_path, mode='r')
+    simg = SliceZarrImage(zimg, p, frame[2], frame[1])
+
+    print(np.max(simg), np.min(simg))
+    
+    figure(201)
+    imgshow(simg.T)
+    
 
 def WalkTreeNormalMIP(swc_path, image_block_path):
     # get an ordered and continuous node index tree and its graph
