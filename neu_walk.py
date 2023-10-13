@@ -31,7 +31,7 @@ _ai = lambda x: np.array(x, dtype=int)
 _va = lambda *a: np.vstack(a)
 _ha = lambda *a: np.hstack(a)   # concatenate along horizontal axis
 f_l_gamma = lambda a, g: np.uint16(((np.float64(a) - a.min()) / (a.max()-a.min())) **(1/g) * (a.max()-a.min()) + a.min())
-imgshow = lambda im: plt.imshow(f_l_gamma(im, 3.0), cmap='gray', origin='lower')
+imgshow = lambda im, **kwval: plt.imshow(f_l_gamma(im, 3.0), cmap='gray', origin='lower', **kwval)
 
 def _idx_blk(p, b):
     q = p + b   # if p is np array, b can be a number of array
@@ -333,15 +333,16 @@ def WalkTreeTangent(swc_path, image_block_path, node_idx):
     imgshow(img_tangent.T)
 
 class SmoothCurve:
-    def __init__(self, rp, s = 0):
+    def __init__(self, rp, spl_smooth = 0):
         """
         Get a (approximate) natural parametrization of the curve passing through points `rp`.
         rp is in the form [[x1,y1,z1], [x2,y2,z2], ...]
+        spl_smooth see reference below, 0 means interpolation, None to use default smoothing. 
         Ref. Smoothing splines - https://docs.scipy.org/doc/scipy/tutorial/interpolate/smoothing_splines.html
         """
         # Use cord length parametrization to approximate the natural parametrization
         piece_len = norm(diff(rp, axis=0), axis=1)
-        tck, u = interpolate.splprep(rp.T, u = _ha(0, piece_len.cumsum()), s = s)
+        tck, u = interpolate.splprep(rp.T, u = _ha(0, piece_len.cumsum()), s = spl_smooth)
         self.tck = tck
         self.u = u
 
@@ -391,21 +392,7 @@ class SmoothCurve:
 
 def WalkProcessNormalMIP(process_pos, image_block_path):
     # interpolation the process by a smooth curve
-    curve = SmoothCurve(process_pos)
-    if 0:
-        fig = figure(200)
-        ax = fig.add_subplot(111, projection='3d')
-        ax.plot3D(process_pos[:,0], process_pos[:,1], process_pos[:,2])
-        ax.axis('equal')
-
-        p, frame = curve.FrenetFrame(5.0)
-        print(p)
-        print(frame)
-        alen = 20
-        ax.quiver(p[0], p[1], p[2], frame[0][0], frame[0][1], frame[0][2], length=alen, color='r')
-        ax.quiver(p[0], p[1], p[2], frame[1][0], frame[1][1], frame[1][2], length=alen, color='g')
-        ax.quiver(p[0], p[1], p[2], frame[2][0], frame[2][1], frame[2][2], length=alen, color='b')
-
+    curve = SmoothCurve(process_pos, spl_smooth=None)
     blk_sz = 128
     zimg = zarr.open(image_block_path, mode='r')
 
@@ -415,8 +402,24 @@ def WalkProcessNormalMIP(process_pos, image_block_path):
     t_interp = np.linspace(0, curve.length(), n_interp)
 
     radius_max_soft = blk_sz / 2
-    radius_step = 5
+    radius_step = 2
     n_radius = int(radius_max_soft / radius_step) + 1
+
+    if 0:
+        fig = figure(200)
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot3D(process_pos[:,0], process_pos[:,1], process_pos[:,2])
+        intpoints = curve(t_interp)
+        ax.plot3D(intpoints[:,0], intpoints[:,1], intpoints[:,2])
+        ax.axis('equal')
+
+        p, frame = curve.FrenetFrame(curve.length())
+        print(p)
+        print(frame)
+        alen = 20
+        ax.quiver(p[0], p[1], p[2], frame[0][0], frame[0][1], frame[0][2], length=alen, color='r')
+        ax.quiver(p[0], p[1], p[2], frame[1][0], frame[1][1], frame[1][2], length=alen, color='g')
+        ax.quiver(p[0], p[1], p[2], frame[2][0], frame[2][1], frame[2][2], length=alen, color='b')
 
     axon_radius_mip = np.zeros((n_interp, n_radius))
     for idx_c_k in range(n_interp):
@@ -424,16 +427,18 @@ def WalkProcessNormalMIP(process_pos, image_block_path):
         p, frame = curve.FrenetFrame(t_interp[idx_c_k])
         print('p =', p)
 
-        if 1:
+        if 0:
             # get the normal-plane image
             timg = SliceZarrImage(zimg, blk_sz, p, frame[2], frame[1])
             figure(201)
+            plt.cla()
             imgshow(timg.T)
 
         normal_img = SliceZarrImage(zimg, blk_sz, p, dp, ddp)
-            
-        if 1:
+        
+        if 0:
             figure(202)
+            plt.cla()
             imgshow(normal_img.T)
 
         # construct circle sample grid
@@ -442,23 +447,24 @@ def WalkProcessNormalMIP(process_pos, image_block_path):
             r = radius_step * j
             n_deg = int(2 * np.pi * r / radius_step) + 1
             s_deg = 2*pi/n_deg * np.arange(n_deg)
-            print(s_deg.shape)
             p_sample = r * _a([cos(s_deg), sin(s_deg)]).T + blk_sz / 2
-            print(p_sample.shape)
-            plt.scatter(p_sample[:,0], p_sample[:,1])
+            #plt.scatter(p_sample[:,0], p_sample[:,1])
 
             # interpolation in Image:
             # See also:
             # https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.map_coordinates.html
             # https://discourse.itk.org/t/how-can-i-get-an-interpolated-value-between-voxels/1535/6
             vals = scipy.ndimage.map_coordinates(normal_img, p_sample.T, order=3)
-            print(vals)
             r_pixel_max[j] = np.max(vals)
         
         axon_radius_mip[idx_c_k, :] = r_pixel_max
     
     figure(205)
-    imgshow(axon_radius_mip.T)
+    plt.cla()
+    imgshow(axon_radius_mip.T, extent=[0, curve.length(), 0, n_radius*radius_step])
+    xlabel('neurite position (um)')
+    ylabel('distance to neurite (um)')
+    title('radius MIP')
     
 def WalkTreeNormalMIP(swc_path, image_block_path):
     # get an ordered and continuous node index tree and its graph
@@ -476,7 +482,7 @@ def WalkTreeNormalMIP(swc_path, image_block_path):
     print(len(processes))
 
     proc_coor = ntree[1][processes[selected_proc],:3]
-    proc_coor = proc_coor[0:20]
+    #proc_coor = proc_coor[0:20]
     WalkProcessNormalMIP(proc_coor, image_block_path)
 
 
