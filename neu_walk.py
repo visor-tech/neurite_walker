@@ -549,15 +549,20 @@ if __name__ == '__main__':
     # Node depth: 1254
     # Path length to root: 23228.5
 
-    swc_path = 'neuron#122.lyp.swc'
+    #plt.ion()
+
+    if len(sys.argv) == 1:
+        s_swc_path = ['neuron#122.lyp.swc']
+    else:
+        s_swc_path = sys.argv[1:]
+
     #block_lym_path = 'RM009_traced_blocks/full_set/block.lym'
     img_block_path = '/mnt/xiaoyy/dataset/zarrblock'
-    
-    plt.ion()
 
     #node_idx = 1936
     #WalkTreeTangent(swc_path, img_block_path, node_idx)
 
-    WalkTreeNormalMIP(swc_path, img_block_path, 2)
+    for swc_path in s_swc_path:
+        WalkTreeNormalMIP(swc_path, img_block_path, 2)
 
-    plt.show()
+    #plt.show()
