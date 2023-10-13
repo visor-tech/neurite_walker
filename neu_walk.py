@@ -343,6 +343,8 @@ class SmoothCurve:
         Ref. Smoothing splines - https://docs.scipy.org/doc/scipy/tutorial/interpolate/smoothing_splines.html
         """
         #print('rp', rp)
+        #print('rp. ', rp.shape)
+        #print('rp. ', rp.dtype)
         if len(rp) < 2:
             raise ValueError('The number of points should be at least 2.')
         if len(rp) == 2:
@@ -353,6 +355,11 @@ class SmoothCurve:
             rp = interpolate.interp1d([0, 1, 2], rp0.T)(np.linspace(0, 2, 4)).T
         # Use cord length parametrization to approximate the natural parametrization
         piece_len = norm(diff(rp, axis=0), axis=1)
+        if np.any(piece_len == 0):
+            print('Warning: redundant point(s), ignoring.')
+            # get only the unique points
+            rp = rp[_ha(True, piece_len>0)]
+            piece_len = norm(diff(rp, axis=0), axis=1)
         tck, u = interpolate.splprep(rp.T, u = _ha(0, piece_len.cumsum()), s = spl_smooth)
         self.tck = tck
         self.u = u
@@ -485,6 +492,7 @@ def WalkTreeNormalMIP(swc_path, image_block_path, resolution):
     #ngraph = GetUndirectedGraph(ntree)
 
     swc_name = os.path.basename(swc_path).split('.')[0]
+    print('SWC name:', swc_name)
     print('Number of porceeses:', len(processes))
     print('Number of nodes:', len(ntree[0]))
 
