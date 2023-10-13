@@ -5,6 +5,8 @@
 #%reload_ext autoreload
 #%autoreload 2
 
+import os
+import sys
 import numpy as np
 from numpy import diff, sin, cos, pi, linspace
 from numpy.linalg import norm
@@ -340,6 +342,15 @@ class SmoothCurve:
         spl_smooth see reference below, 0 means interpolation, None to use default smoothing. 
         Ref. Smoothing splines - https://docs.scipy.org/doc/scipy/tutorial/interpolate/smoothing_splines.html
         """
+        #print('rp', rp)
+        if len(rp) < 2:
+            raise ValueError('The number of points should be at least 2.')
+        if len(rp) == 2:
+            # add two extra point to ease the interpolation
+            rp = _va([rp[0], 2/3*rp[0] + 1/3*rp[1], 1/3*rp[0] + 2/3*rp[1], rp[1]])
+        if len(rp) == 3:
+            rp0 = rp
+            rp = interpolate.interp1d([0, 1, 2], rp0.T)(np.linspace(0, 2, 4)).T
         # Use cord length parametrization to approximate the natural parametrization
         piece_len = norm(diff(rp, axis=0), axis=1)
         tck, u = interpolate.splprep(rp.T, u = _ha(0, piece_len.cumsum()), s = spl_smooth)
@@ -368,7 +379,8 @@ class SmoothCurve:
         # get tanget vector
         dp = self(t, der=1)  # approximately we have ||dp|| = 1
         l2 = norm(dp, axis=-1)
-        dp = dp / l2.reshape(list(l2.shape)+[1])   # reshape to help auto broadcasting
+        if np.any(l2):
+            dp = dp / l2.reshape(list(l2.shape)+[1])   # reshape to help auto broadcasting
         return p, dp
 
     def PointTangentNormal(self, t):
@@ -390,19 +402,19 @@ class SmoothCurve:
         ddp = ddp / norm(ddp)
         return p, (dp, ddp, np.cross(dp, ddp))
 
-def WalkProcessNormalMIP(process_pos, image_block_path):
+def WalkProcessNormalMIP(process_pos, image_block_path, interp_resolution = 2):
     # interpolation the process by a smooth curve
     curve = SmoothCurve(process_pos, spl_smooth=None)
     blk_sz = 128
     zimg = zarr.open(image_block_path, mode='r')
 
-    # parameter for getting points to be inspected
-    t_step = 2
-    n_interp = int(curve.length() / t_step) + 1
-    t_interp = np.linspace(0, curve.length(), n_interp)
+    # parameters for getting points to be inspected
+    t_step = interp_resolution
+    n_t = int(curve.length() / t_step) + 1
+    t_interp = np.linspace(0, curve.length(), n_t)
 
     radius_max_soft = blk_sz / 2
-    radius_step = 2
+    radius_step = interp_resolution
     n_radius = int(radius_max_soft / radius_step) + 1
 
     if 0:
@@ -421,11 +433,11 @@ def WalkProcessNormalMIP(process_pos, image_block_path):
         ax.quiver(p[0], p[1], p[2], frame[1][0], frame[1][1], frame[1][2], length=alen, color='g')
         ax.quiver(p[0], p[1], p[2], frame[2][0], frame[2][1], frame[2][2], length=alen, color='b')
 
-    axon_radius_mip = np.zeros((n_interp, n_radius))
-    for idx_c_k in range(n_interp):
+    axon_radius_mip = np.zeros((n_t, n_radius), dtype=zimg.dtype)
+    for idx_c_k in range(n_t):
         p, dp, ddp = curve.PointTangentNormal(t_interp[idx_c_k])
         p, frame = curve.FrenetFrame(t_interp[idx_c_k])
-        print('p =', p)
+        #print('p =', p)
 
         if 0:
             # get the normal-plane image
@@ -442,7 +454,7 @@ def WalkProcessNormalMIP(process_pos, image_block_path):
             imgshow(normal_img.T)
 
         # construct circle sample grid
-        r_pixel_max = np.zeros(n_radius)
+        r_pixel_max = np.zeros(n_radius, dtype=zimg.dtype)
         for j in range(n_radius):
             r = radius_step * j
             n_deg = int(2 * np.pi * r / radius_step) + 1
@@ -459,14 +471,10 @@ def WalkProcessNormalMIP(process_pos, image_block_path):
         
         axon_radius_mip[idx_c_k, :] = r_pixel_max
     
-    figure(205)
-    plt.cla()
-    imgshow(axon_radius_mip.T, extent=[0, curve.length(), 0, n_radius*radius_step])
-    xlabel('neurite position (um)')
-    ylabel('distance to neurite (um)')
-    title('radius MIP')
+    extent = [0, curve.length(), 0, n_radius*radius_step]
+    return axon_radius_mip, extent
     
-def WalkTreeNormalMIP(swc_path, image_block_path):
+def WalkTreeNormalMIP(swc_path, image_block_path, resolution):
     # get an ordered and continuous node index tree and its graph
     print("WalkTreeNormalMIP")
     ntree = LoadSWCTree(swc_path)
@@ -476,14 +484,26 @@ def WalkTreeNormalMIP(swc_path, image_block_path):
     #ntree = (tr_idx, ntree[1])
     #ngraph = GetUndirectedGraph(ntree)
 
-    print(list(zip(range(10000), map(len, processes))))
-    selected_proc = 54
+    swc_name = os.path.basename(swc_path).split('.')[0]
+    print('Number of porceeses:', len(processes))
+    print('Number of nodes:', len(ntree[0]))
 
-    print(len(processes))
+    for idx_processes in range(len(processes)):
+        print(f'process {idx_processes}, node length {len(processes[idx_processes])}')
 
-    proc_coor = ntree[1][processes[selected_proc],:3]
-    #proc_coor = proc_coor[0:20]
-    WalkProcessNormalMIP(proc_coor, image_block_path)
+        proc_coor = ntree[1][processes[idx_processes],:3]
+        axon_radius_mip, extent = WalkProcessNormalMIP(proc_coor, image_block_path, resolution)
+
+        if 0:
+            figure(205)
+            plt.cla()
+            imgshow(axon_radius_mip.T, extent=extent)
+            xlabel('neurite position (um)')
+            ylabel('distance to neurite (um)')
+            title('radius MIP')
+        
+        img_out_name = f'pic_tmp/{swc_name}_rmip_proc{idx_processes}.tif'
+        tifffile.imwrite(img_out_name, axon_radius_mip.T)
 
 
 def Test3dImageSlicing():
@@ -514,20 +534,22 @@ def Test3dImageSlicing():
 if __name__ == '__main__':
     #Test3dImageSlicing()
 
+    #swc_path = 'neuron#255.lyp.swc'
     # node_idx = 1936, node_id = 932514
     # xyz: [52785.  28145.6 55668.9]
     # Branch depth: 1
     # Node depth: 1254
     # Path length to root: 23228.5
-    swc_path = 'neuron#255.lyp.swc'
-    node_idx = 1936
+
+    swc_path = 'neuron#122.lyp.swc'
     #block_lym_path = 'RM009_traced_blocks/full_set/block.lym'
     img_block_path = '/mnt/xiaoyy/dataset/zarrblock'
     
     plt.ion()
 
+    #node_idx = 1936
     #WalkTreeTangent(swc_path, img_block_path, node_idx)
 
-    WalkTreeNormalMIP(swc_path, img_block_path)
+    WalkTreeNormalMIP(swc_path, img_block_path, 2)
 
     plt.show()
