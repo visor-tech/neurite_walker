@@ -342,24 +342,23 @@ class SmoothCurve:
         spl_smooth see reference below, 0 means interpolation, None to use default smoothing. 
         Ref. Smoothing splines - https://docs.scipy.org/doc/scipy/tutorial/interpolate/smoothing_splines.html
         """
-        #print('rp', rp)
-        #print('rp. ', rp.shape)
-        #print('rp. ', rp.dtype)
-        if len(rp) < 2:
-            raise ValueError('The number of points should be at least 2.')
-        if len(rp) == 2:
-            # add two extra point to ease the interpolation
-            rp = _va([rp[0], 2/3*rp[0] + 1/3*rp[1], 1/3*rp[0] + 2/3*rp[1], rp[1]])
-        if len(rp) == 3:
-            rp0 = rp
-            rp = interpolate.interp1d([0, 1, 2], rp0.T)(np.linspace(0, 2, 4)).T
-        # Use cord length parametrization to approximate the natural parametrization
         piece_len = norm(diff(rp, axis=0), axis=1)
         if np.any(piece_len == 0):
             print('Warning: redundant point(s), ignoring.')
             # get only the unique points
             rp = rp[_ha(True, piece_len>0)]
             piece_len = norm(diff(rp, axis=0), axis=1)
+        if len(rp) <=3:
+            if len(rp) < 2:
+                raise ValueError('The number of points should be at least 2.')
+            if len(rp) == 2:
+                # add two extra point to ease the interpolation
+                rp = _va([rp[0], 2/3*rp[0] + 1/3*rp[1], 1/3*rp[0] + 2/3*rp[1], rp[1]])
+            if len(rp) == 3:
+                rp0 = rp
+                rp = interpolate.interp1d([0, 1, 2], rp0.T)(np.linspace(0, 2, 4)).T
+            piece_len = norm(diff(rp, axis=0), axis=1)
+        # Use cord length parametrization to approximate the natural parametrization
         tck, u = interpolate.splprep(rp.T, u = _ha(0, piece_len.cumsum()), s = spl_smooth)
         self.tck = tck
         self.u = u
