@@ -20,8 +20,9 @@ import zarr
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import xlabel, ylabel, title, figure
 
-import sys
-sys.path.append('/home/xyy/code/py/vtk_test/')
+# add path of current py file
+cur_path = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(cur_path, 'external/neu3dviewer'))
 from neu3dviewer.data_loader import (
     LoadSWCTree, SplitSWCTree, SWCDFSSort, SWCNodeRelabel, GetUndirectedGraph,
     OnDemandVolumeLoader
@@ -408,7 +409,7 @@ class SmoothCurve:
         ddp = ddp / norm(ddp)
         return p, (dp, ddp, np.cross(dp, ddp))
 
-def WalkProcessNormalMIP(process_pos, image_block_path, interp_resolution = 2):
+def WalkProcessCircularMIP(process_pos, image_block_path, interp_resolution = 2):
     # interpolation the process by a smooth curve
     curve = SmoothCurve(process_pos, spl_smooth=None)
     blk_sz = 128
@@ -439,7 +440,7 @@ def WalkProcessNormalMIP(process_pos, image_block_path, interp_resolution = 2):
         ax.quiver(p[0], p[1], p[2], frame[1][0], frame[1][1], frame[1][2], length=alen, color='g')
         ax.quiver(p[0], p[1], p[2], frame[2][0], frame[2][1], frame[2][2], length=alen, color='b')
 
-    axon_radius_mip = np.zeros((n_t, n_radius), dtype=zimg.dtype)
+    axon_circular_mip = np.zeros((n_t, n_radius), dtype=zimg.dtype)
     for idx_c_k in range(n_t):
         p, dp, ddp = curve.PointTangentNormal(t_interp[idx_c_k])
         p, frame = curve.FrenetFrame(t_interp[idx_c_k])
@@ -475,14 +476,14 @@ def WalkProcessNormalMIP(process_pos, image_block_path, interp_resolution = 2):
             vals = scipy.ndimage.map_coordinates(normal_img, p_sample.T, order=3)
             r_pixel_max[j] = np.max(vals)
         
-        axon_radius_mip[idx_c_k, :] = r_pixel_max
+        axon_circular_mip[idx_c_k, :] = r_pixel_max
     
     extent = [0, curve.length(), 0, n_radius*radius_step]
-    return axon_radius_mip, extent
+    return axon_circular_mip, extent
     
-def WalkTreeNormalMIP(swc_path, image_block_path, resolution):
+def WalkTreeCircularMIP(swc_path, image_block_path, resolution):
     # get an ordered and continuous node index tree and its graph
-    print("WalkTreeNormalMIP")
+    print("WalkTreeCircularMIP")
     ntree = LoadSWCTree(swc_path)
     processes = SplitSWCTree(ntree)
     ntree, processes = SWCDFSSort(ntree, processes)
@@ -499,18 +500,18 @@ def WalkTreeNormalMIP(swc_path, image_block_path, resolution):
         print(f'process {idx_processes}, node length {len(processes[idx_processes])}')
 
         proc_coor = ntree[1][processes[idx_processes],:3]
-        axon_radius_mip, extent = WalkProcessNormalMIP(proc_coor, image_block_path, resolution)
+        axon_circular_mip, extent = WalkProcessCircularMIP(proc_coor, image_block_path, resolution)
 
         if 0:
             figure(205)
             plt.cla()
-            imgshow(axon_radius_mip.T, extent=extent)
+            imgshow(axon_circular_mip.T, extent=extent)
             xlabel('neurite position (um)')
             ylabel('distance to neurite (um)')
-            title('radius MIP')
+            title('circular MIP')
         
-        img_out_name = f'pic_tmp/{swc_name}_rmip_proc{idx_processes}.tif'
-        tifffile.imwrite(img_out_name, axon_radius_mip.T)
+        img_out_name = f'pic_tmp/{swc_name}_cmip_proc{idx_processes}.tif'
+        tifffile.imwrite(img_out_name, axon_circular_mip.T)
 
 
 def Test3dImageSlicing():
@@ -539,8 +540,6 @@ def Test3dImageSlicing():
     plt.show()
 
 if __name__ == '__main__':
-    #Test3dImageSlicing()
-
     #swc_path = 'neuron#255.lyp.swc'
     # node_idx = 1936, node_id = 932514
     # xyz: [52785.  28145.6 55668.9]
@@ -548,20 +547,26 @@ if __name__ == '__main__':
     # Node depth: 1254
     # Path length to root: 23228.5
 
-    #plt.ion()
-
-    if len(sys.argv) == 1:
-        s_swc_path = ['neuron#122.lyp.swc']
-    else:
-        s_swc_path = sys.argv[1:]
-
+    interactive_mode = False
     #block_lym_path = 'RM009_traced_blocks/full_set/block.lym'
     img_block_path = '/mnt/xiaoyy/dataset/zarrblock'
 
-    #node_idx = 1936
-    #WalkTreeTangent(swc_path, img_block_path, node_idx)
+    if len(sys.argv) == 1:
+        s_swc_path = ['neuron#122.lyp.swc']
+    elif sys.argv[1].startswith('--'):
+        plt.ion()
+        if sys.argv[1] == '--test_slicing':
+            Test3dImageSlicing()
+        elif sys.argv[1] == '--tangent':
+            swc_path = 'neuron#255.lyp.swc'
+            node_idx = 1936
+            WalkTreeTangent(swc_path, img_block_path, node_idx)
+        else:
+            print('Hello?')
+        plt.show()
+        exit(0)
+    else:
+        s_swc_path = sys.argv[1:]
 
     for swc_path in s_swc_path:
-        WalkTreeNormalMIP(swc_path, img_block_path, 2)
-
-    #plt.show()
+        WalkTreeCircularMIP(swc_path, img_block_path, 2)
