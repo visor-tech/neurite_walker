@@ -7,6 +7,7 @@
 
 import os
 import sys
+import glob   # for list files
 import numpy as np
 from numpy import diff, sin, cos, pi, linspace
 from numpy.linalg import norm
@@ -85,6 +86,31 @@ def NormalSlice3DImage(img3d, p_center, vec_normal, vec_up):
     img_normal = sitk.GetArrayFromImage(img_normal)
     img_normal = img_normal[0, :, :].T
     return img_normal
+
+def Test3dImageSlicing():
+    # load the 3D image
+    tif_path = "/home/xyy/code/py/neurite_walker/52224-30976-56064.tif"
+    img3d = tifffile.imread(tif_path).T
+
+    # set the center point and normal vector
+    p_center   = _a([30, 90, 40])
+    vec_normal = _a([1, 0, 0])  # vectors always follow (x,y,z)
+    vec_up     = _a([0, 0, 1])
+    #vec_normal = _a([0, 0, 1])  # vectors always follow (x,y,z)
+    #vec_up     = _a([0, 1, 0])
+    # get the normal-plane image
+    img_normal = NormalSlice3DImage(img3d, p_center, vec_normal, vec_up)
+
+    # show the reference image
+    #plt.ion()
+    ShowThreeViews(img3d, p_center)
+
+    figure(10)
+    # rescale the image by min and max
+    #img_normal = (img_normal - img_normal.min()) / (img_normal.max() - img_normal.min())
+    imgshow(img_normal.T)
+    title(f'slice: cen{p_center}, nor{vec_normal}, up{vec_up}')
+    plt.show()
 
 def SliceZarrImage(zarr_image, blk_sz, p_center, vec_normal, vec_up):
     blk_sz = 128
@@ -279,14 +305,6 @@ def WalkTreeTangent(swc_path, image_block_path, node_idx):
     imgz = zarr.open(image_block_path, mode='r')
 
     p_img_corner = p_img_center - _a(desired_block_size) / 2
-
-    #p_img_corner = p_img_center.copy()
-    #p_img_corner[0] = np.floor(p_img_center[0] / 128) * 128
-    #p_img_corner[1] = p_img_center[1] - 128 / 2
-    #p_img_corner[2] = p_img_center[2] - 128 / 2
-
-    # align to 128 boundary
-    #p_img_corner = np.floor(p_img_center / 128) * 128
 
     idx_rg = [slice(int(p_img_corner[i]),
                     int(p_img_corner[i] + desired_block_size[i]))
@@ -513,31 +531,62 @@ def WalkTreeCircularMIP(swc_path, image_block_path, resolution):
         img_out_name = f'pic_tmp/{swc_name}_cmip_proc{idx_processes}.tif'
         tifffile.imwrite(img_out_name, axon_circular_mip.T)
 
+def ViewTreeCircularMIP(neu_id, pos0, swc_path, image_block_path, pic_path):
+    # list and sort pic path
+    tif_pathes = glob.glob(os.path.join(pic_path, f'neuron#{neu_id}_rmip_*.tif'))
+    get_proc_id = lambda s: int(s.split('proc')[1].split('.')[0])
+    tif_pathes = sorted(tif_pathes, key=get_proc_id)
+    proc_ids = [get_proc_id(os.path.basename(s)) for s in tif_pathes]
+    
+    #print('\n'.join(tif_pathes))
+    #print(proc_ids)
 
-def Test3dImageSlicing():
-    # load the 3D image
-    tif_path = "/home/xyy/code/py/neurite_walker/52224-30976-56064.tif"
-    img3d = tifffile.imread(tif_path).T
+    gap_size = 3
+    screen_size = 1000
 
-    # set the center point and normal vector
-    p_center   = _a([30, 90, 40])
-    vec_normal = _a([1, 0, 0])  # vectors always follow (x,y,z)
-    vec_up     = _a([0, 0, 1])
-    #vec_normal = _a([0, 0, 1])  # vectors always follow (x,y,z)
-    #vec_up     = _a([0, 1, 0])
-    # get the normal-plane image
-    img_normal = NormalSlice3DImage(img3d, p_center, vec_normal, vec_up)
+    proc_img_s = [tifffile.imread(s).T for s in tif_pathes]
+    row_idxs = np.cumsum(_ha(0, _ai([i.shape[0]+gap_size for i in proc_img_s])))
+    img_height = proc_img_s[0].shape[1]
 
-    # show the reference image
-    #plt.ion()
-    ShowThreeViews(img3d, p_center)
+    screen_img = np.zeros((screen_size, img_height), dtype=np.uint16)
+    id_img = np.searchsorted(row_idxs, pos0, 'right') - 1
+    screen_img_pos = 0
+    i_bg = pos0 - row_idxs[id_img]
+    # fill screen image
+    while id_img < len(proc_img_s) and screen_img_pos < screen_size:
+        i_len = proc_img_s[id_img].shape[0]
+        if screen_size - screen_img_pos < i_len - i_bg:
+            i_ed = screen_size - screen_img_pos + i_bg
+        else:
+            i_ed = i_len
+        img = proc_img_s[id_img][i_bg:i_ed, :]
+        screen_img[screen_img_pos:screen_img_pos + i_ed - i_bg, :] = img
+        screen_img_pos += i_ed - i_bg + gap_size
+        id_img += 1
+        i_bg = 0
 
-    figure(10)
-    # rescale the image by min and max
-    #img_normal = (img_normal - img_normal.min()) / (img_normal.max() - img_normal.min())
-    imgshow(img_normal.T)
-    title(f'slice: cen{p_center}, nor{vec_normal}, up{vec_up}')
-    plt.show()
+    figure(301).clear()
+    fig, axs = plt.subplots(4, num=301)
+    fig.suptitle(f'cMIP, neuron {neu_id}, pos {pos0}')
+    axshow = lambda axs, k, n, im, **kwval: \
+        axs[k].imshow(f_l_gamma( \
+                im[int(screen_size/n*k) : int(screen_size/n*(k+1)), :].T,
+                3.0),
+            cmap='gray', origin='lower', **kwval)
+    axshow(axs, 0, 4, screen_img)
+    axshow(axs, 1, 4, screen_img)
+    axshow(axs, 2, 4, screen_img)
+    axshow(axs, 3, 4, screen_img)
+    fig.canvas.mpl_connect('key_press_event', on_cmip_key)
+    fig.canvas.mpl_connect('button_press_event', on_cmip_mouse)
+
+def on_cmip_key(event):
+    if event.key == 'y':
+        print('hello y')
+
+def on_cmip_mouse(event):
+    if event.button == 1:
+        print(f'left axis {event.inaxes} pos: {event.xdata}, {event.ydata}; screen pos {event.x}, {event.y}')
 
 if __name__ == '__main__':
     #swc_path = 'neuron#255.lyp.swc'
@@ -561,10 +610,13 @@ if __name__ == '__main__':
             swc_path = 'neuron#255.lyp.swc'
             node_idx = 1936
             WalkTreeTangent(swc_path, img_block_path, node_idx)
+        elif sys.argv[1] == '--view':
+            swc_path = 'neuron#122.lyp.swc'
+            ViewTreeCircularMIP(122, 100, swc_path, img_block_path, 'pic_rm009_1.6.6')
         else:
             print('Hello?')
         plt.show()
-        exit(0)
+        sys.exit(0)
     else:
         s_swc_path = sys.argv[1:]
 
