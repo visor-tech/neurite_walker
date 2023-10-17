@@ -531,62 +531,68 @@ def WalkTreeCircularMIP(swc_path, image_block_path, resolution):
         img_out_name = f'pic_tmp/{swc_name}_cmip_proc{idx_processes}.tif'
         tifffile.imwrite(img_out_name, axon_circular_mip.T)
 
-def ViewTreeCircularMIP(neu_id, pos0, swc_path, image_block_path, pic_path):
-    # list and sort pic path
-    tif_pathes = glob.glob(os.path.join(pic_path, f'neuron#{neu_id}_rmip_*.tif'))
-    get_proc_id = lambda s: int(s.split('proc')[1].split('.')[0])
-    tif_pathes = sorted(tif_pathes, key=get_proc_id)
-    proc_ids = [get_proc_id(os.path.basename(s)) for s in tif_pathes]
+class TreeCircularMIPViewer:
+    def __init__(self, swc_dir_path, image_block_path, pic_path):
+        self.swc_dir_path = swc_dir_path
+        self.image_block_path = image_block_path
+        self.pic_path = pic_path
     
-    #print('\n'.join(tif_pathes))
-    #print(proc_ids)
+    def ConstructCMIP(self, neu_id, pos0):
+        # list and sort pic path
+        tif_pathes = glob.glob(os.path.join(self.pic_path, f'neuron#{neu_id}_rmip_*.tif'))
+        get_proc_id = lambda s: int(s.split('proc')[1].split('.')[0])
+        tif_pathes = sorted(tif_pathes, key=get_proc_id)
+        proc_ids = [get_proc_id(os.path.basename(s)) for s in tif_pathes]
+        
+        #print('\n'.join(tif_pathes))
+        #print(proc_ids)
 
-    gap_size = 3
-    screen_size = 1000
+        gap_size = 3
+        screen_size = 1000
 
-    proc_img_s = [tifffile.imread(s).T for s in tif_pathes]
-    row_idxs = np.cumsum(_ha(0, _ai([i.shape[0]+gap_size for i in proc_img_s])))
-    img_height = proc_img_s[0].shape[1]
+        proc_img_s = [tifffile.imread(s).T for s in tif_pathes]
+        row_idxs = np.cumsum(_ha(0, _ai([i.shape[0]+gap_size for i in proc_img_s])))
+        img_height = proc_img_s[0].shape[1]
 
-    screen_img = np.zeros((screen_size, img_height), dtype=np.uint16)
-    id_img = np.searchsorted(row_idxs, pos0, 'right') - 1
-    screen_img_pos = 0
-    i_bg = pos0 - row_idxs[id_img]
-    # fill screen image
-    while id_img < len(proc_img_s) and screen_img_pos < screen_size:
-        i_len = proc_img_s[id_img].shape[0]
-        if screen_size - screen_img_pos < i_len - i_bg:
-            i_ed = screen_size - screen_img_pos + i_bg
-        else:
-            i_ed = i_len
-        img = proc_img_s[id_img][i_bg:i_ed, :]
-        screen_img[screen_img_pos:screen_img_pos + i_ed - i_bg, :] = img
-        screen_img_pos += i_ed - i_bg + gap_size
-        id_img += 1
-        i_bg = 0
+        screen_img = np.zeros((screen_size, img_height), dtype=np.uint16)
+        id_img = np.searchsorted(row_idxs, pos0, 'right') - 1
+        screen_img_pos = 0
+        i_bg = pos0 - row_idxs[id_img]
+        # fill screen image
+        while id_img < len(proc_img_s) and screen_img_pos < screen_size:
+            i_len = proc_img_s[id_img].shape[0]
+            if screen_size - screen_img_pos < i_len - i_bg:
+                i_ed = screen_size - screen_img_pos + i_bg
+            else:
+                i_ed = i_len
+            img = proc_img_s[id_img][i_bg:i_ed, :]
+            screen_img[screen_img_pos:screen_img_pos + i_ed - i_bg, :] = img
+            screen_img_pos += i_ed - i_bg + gap_size
+            id_img += 1
+            i_bg = 0
 
-    figure(301).clear()
-    fig, axs = plt.subplots(4, num=301)
-    fig.suptitle(f'cMIP, neuron {neu_id}, pos {pos0}')
-    axshow = lambda axs, k, n, im, **kwval: \
-        axs[k].imshow(f_l_gamma( \
-                im[int(screen_size/n*k) : int(screen_size/n*(k+1)), :].T,
-                3.0),
-            cmap='gray', origin='lower', **kwval)
-    axshow(axs, 0, 4, screen_img)
-    axshow(axs, 1, 4, screen_img)
-    axshow(axs, 2, 4, screen_img)
-    axshow(axs, 3, 4, screen_img)
-    fig.canvas.mpl_connect('key_press_event', on_cmip_key)
-    fig.canvas.mpl_connect('button_press_event', on_cmip_mouse)
+        figure(301).clear()
+        fig, axs = plt.subplots(4, num=301)
+        fig.suptitle(f'cMIP, neuron {neu_id}, pos {pos0}')
+        axshow = lambda axs, k, n, im, **kwval: \
+            axs[k].imshow(f_l_gamma( \
+                    im[int(screen_size/n*k) : int(screen_size/n*(k+1)), :].T,
+                    3.0),
+                cmap='gray', origin='lower', **kwval)
+        axshow(axs, 0, 4, screen_img)
+        axshow(axs, 1, 4, screen_img)
+        axshow(axs, 2, 4, screen_img)
+        axshow(axs, 3, 4, screen_img)
+        fig.canvas.mpl_connect('key_press_event', self.on_cmip_key)
+        fig.canvas.mpl_connect('button_press_event', self.on_cmip_mouse)
 
-def on_cmip_key(event):
-    if event.key == 'y':
-        print('hello y')
+    def on_cmip_key(self, event):
+        if event.key == 'y':
+            print('hello y')
 
-def on_cmip_mouse(event):
-    if event.button == 1:
-        print(f'left axis {event.inaxes} pos: {event.xdata}, {event.ydata}; screen pos {event.x}, {event.y}')
+    def on_cmip_mouse(self, event):
+        if event.button == 1:
+            print(f'left axis {event.inaxes} pos: {event.xdata}, {event.ydata}; screen pos {event.x}, {event.y}')
 
 if __name__ == '__main__':
     #swc_path = 'neuron#255.lyp.swc'
@@ -612,7 +618,8 @@ if __name__ == '__main__':
             WalkTreeTangent(swc_path, img_block_path, node_idx)
         elif sys.argv[1] == '--view':
             swc_path = 'neuron#122.lyp.swc'
-            ViewTreeCircularMIP(122, 100, swc_path, img_block_path, 'pic_rm009_1.6.6')
+            cmip_viewer = TreeCircularMIPViewer(swc_path, img_block_path, 'pic_rm009_1.6.6')
+            cmip_viewer.ConstructCMIP(122, 100)
         else:
             print('Hello?')
         plt.show()
