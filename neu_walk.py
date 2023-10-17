@@ -499,15 +499,19 @@ def WalkProcessCircularMIP(process_pos, image_block_path, interp_resolution = 2)
     extent = [0, curve.length(), 0, n_radius*radius_step]
     return axon_circular_mip, extent
     
-def WalkTreeCircularMIP(swc_path, image_block_path, resolution):
-    # get an ordered and continuous node index tree and its graph
-    print("WalkTreeCircularMIP")
+def LoadSWCTreeProcess(swc_path):
     ntree = LoadSWCTree(swc_path)
     processes = SplitSWCTree(ntree)
     ntree, processes = SWCDFSSort(ntree, processes)
     #tr_idx = SWCNodeRelabel(ntree)
     #ntree = (tr_idx, ntree[1])
     #ngraph = GetUndirectedGraph(ntree)
+    return ntree, processes
+
+def WalkTreeCircularMIP(swc_path, image_block_path, resolution):
+    # get an ordered and continuous node index tree and its graph
+    print("WalkTreeCircularMIP")
+    ntree, processes = LoadSWCTreeProcess(swc_path)
 
     swc_name = os.path.basename(swc_path).split('.')[0]
     print('SWC name:', swc_name)
@@ -533,7 +537,7 @@ def WalkTreeCircularMIP(swc_path, image_block_path, resolution):
 
 class TreeCircularMIPViewer:
     def __init__(self, swc_path, image_block_path, pic_path):
-        self.swc_dir_path = swc_path
+        self.swc_path = swc_path
         self.image_block_path = image_block_path
         self.pic_path = pic_path
         # extract neuron id, e.g. 255 in 'neuron#255.lyp.swc'
@@ -550,6 +554,7 @@ class TreeCircularMIPViewer:
         
         #print('\n'.join(self.tif_pathes))
         #print(self.proc_ids)
+        self.cmip_pixel_size_um = 2.0
         self.gap_size = 3
 
         # load images and construct indexing
@@ -557,6 +562,27 @@ class TreeCircularMIPViewer:
         self.row_idxs = np.cumsum(_ha(0, _ai(
             [i.shape[0] + self.gap_size for i in self.proc_img_s])))
         self.img_height = self.proc_img_s[0].shape[1]
+
+        self.screen_img_gamma = 3.0
+    
+    def init_swc(self):
+        print('Loading swc...', end='')
+        self.ntree, self.processes = LoadSWCTreeProcess(self.swc_path)
+        print('done.')
+    
+    def cmip_pos_to_coordinate(self, cmip_pos):
+        if not hasattr(self, 'ntree'):
+            self.init_swc()
+        id_proc = np.searchsorted(self.row_idxs, cmip_pos, 'right') - 1
+        local_pos = cmip_pos - self.row_idxs[id_proc]
+        if local_pos > self.proc_img_s[id_proc].shape[0]:
+            print('Warning: Clicked in the gap.')
+            local_pos = self.proc_img_s[id_proc].shape[0] - 1
+        proc_coor = self.ntree[1][self.processes[id_proc],:3]
+        curve = SmoothCurve(proc_coor, spl_smooth=None)
+        print('id_proc:', id_proc, '  translated:', self.proc_ids[id_proc])
+        print('local_pos', local_pos)
+        print('curve position:', curve(local_pos * self.cmip_pixel_size_um))
     
     def ConstructCMIP(self, pos0, screen_size = 1000):
         proc_img_s = self.proc_img_s
@@ -590,7 +616,7 @@ class TreeCircularMIPViewer:
         axshow = lambda axs, k, n, im, **kwval: \
             axs[k].imshow(f_l_gamma( \
                     im[int(screen_size/n*k) : int(screen_size/n*(k+1)), :].T,
-                    3.0),
+                    self.screen_img_gamma),
                 cmap='gray', origin='lower', **kwval)
         for id_s in range(n_screen_rows):
             axshow(axs, id_s, n_screen_rows, screen_img)
@@ -609,8 +635,16 @@ class TreeCircularMIPViewer:
         if event.key == 'pagedown':
             self.ConstructCMIP(self.last_pos0 + int(self.screen_size/2))
             plt.show()
-        if event.key == 'pageup':
+        elif event.key == 'pageup':
             self.ConstructCMIP(self.last_pos0 - int(self.screen_size/2))
+            plt.show()
+        elif event.key == '*':
+            self.screen_img_gamma += 0.5
+            self.ConstructCMIP(self.last_pos0)
+            plt.show()
+        elif event.key == '/':
+            self.screen_img_gamma = max(self.screen_img_gamma - 0.5, 0.5)
+            self.ConstructCMIP(self.last_pos0)
             plt.show()
 
     def on_cmip_mouse(self, event):
@@ -618,9 +652,10 @@ class TreeCircularMIPViewer:
             print('Left click.')
             print(f' pos: {event.xdata}, {event.ydata}; screen pos {event.x}, {event.y}')
             id_ax = list(self.axs).index(event.inaxes)
-            pos = self.last_pos0 + id_ax * self.screen_size / self.n_screen_row + event.xdata
+            cmip_pos = self.last_pos0 + id_ax * self.screen_size / self.n_screen_row + event.xdata
             print(' ax id', id_ax)
-            print('pos', pos)
+            print('pos', cmip_pos)
+            self.cmip_pos_to_coordinate(cmip_pos)
 
 if __name__ == '__main__':
     #swc_path = 'neuron#255.lyp.swc'
