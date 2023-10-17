@@ -542,7 +542,7 @@ class TreeCircularMIPViewer:
         self.pic_path = pic_path
         # extract neuron id, e.g. 255 in 'neuron#255.lyp.swc'
         self.neu_id = int(os.path.basename(swc_path).split('neuron#')[1].split('.')[0])
-        print(self.neu_id)
+        print(f'neuron id: {self.neu_id}')
 
         # list and sort pic path
         self.tif_pathes = glob.glob(os.path.join(
@@ -578,11 +578,12 @@ class TreeCircularMIPViewer:
         if local_pos > self.proc_img_s[id_proc].shape[0]:
             print('Warning: Clicked in the gap.')
             local_pos = self.proc_img_s[id_proc].shape[0] - 1
+        local_pos = local_pos * self.cmip_pixel_size_um
         proc_coor = self.ntree[1][self.processes[id_proc],:3]
         curve = SmoothCurve(proc_coor, spl_smooth=None)
-        print('id_proc:', id_proc, '  translated:', self.proc_ids[id_proc])
-        print('local_pos', local_pos)
-        print('curve position:', curve(local_pos * self.cmip_pixel_size_um))
+        print(f'id_proc: {id_proc}, local_pos: {local_pos:.1f} um')
+        r = curve(local_pos)
+        print(f'interpolated position: [{r[0]:.1f}, {r[1]:.1f}, {r[2]:.1f}]')
     
     def ConstructCMIP(self, pos0, screen_size = 1000):
         proc_img_s = self.proc_img_s
@@ -602,7 +603,7 @@ class TreeCircularMIPViewer:
                 i_ed = screen_size - screen_img_pos + i_bg
             else:
                 i_ed = i_len
-            print('id_img', id_img, 'i_len', i_len, 'i_bg', i_bg, 'i_ed', i_ed)
+            #print('id_img', id_img, 'i_len', i_len, 'i_bg', i_bg, 'i_ed', i_ed)
             img = proc_img_s[id_img][i_bg:i_ed, :]
             screen_img[screen_img_pos:screen_img_pos + max(i_ed - i_bg, 0), :] = img
             screen_img_pos += i_ed - i_bg + gap_size
@@ -634,27 +635,31 @@ class TreeCircularMIPViewer:
         print('key pressed:', event.key)
         if event.key == 'pagedown':
             self.ConstructCMIP(self.last_pos0 + int(self.screen_size/2))
-            plt.show()
+            #plt.show()
+            self.fig.canvas.draw()
         elif event.key == 'pageup':
             self.ConstructCMIP(self.last_pos0 - int(self.screen_size/2))
-            plt.show()
+            #plt.show()
+            self.fig.canvas.draw()
         elif event.key == '*':
             self.screen_img_gamma += 0.5
             self.ConstructCMIP(self.last_pos0)
-            plt.show()
+            #plt.show()
+            self.fig.canvas.draw()
         elif event.key == '/':
             self.screen_img_gamma = max(self.screen_img_gamma - 0.5, 0.5)
             self.ConstructCMIP(self.last_pos0)
-            plt.show()
+            #plt.show()
+            self.fig.canvas.draw()
 
     def on_cmip_mouse(self, event):
         if event.button == 1 and event.inaxes:
-            print('Left click.')
-            print(f' pos: {event.xdata}, {event.ydata}; screen pos {event.x}, {event.y}')
+            print('=== Left click ===')
             id_ax = list(self.axs).index(event.inaxes)
             cmip_pos = self.last_pos0 + id_ax * self.screen_size / self.n_screen_row + event.xdata
-            print(' ax id', id_ax)
-            print('pos', cmip_pos)
+            #print(f' pos: {event.xdata}, {event.ydata}; screen pos {event.x}, {event.y}')
+            #print(' ax id', id_ax)
+            print(f'cmip_pos: {cmip_pos:.1f} pixel')
             self.cmip_pos_to_coordinate(cmip_pos)
 
 if __name__ == '__main__':
@@ -672,20 +677,26 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         s_swc_path = ['neuron#122.lyp.swc']
     elif sys.argv[1].startswith('--'):
-        plt.ion()
         if sys.argv[1] == '--test_slicing':
+            plt.ion()
             Test3dImageSlicing()
+            plt.show()
         elif sys.argv[1] == '--tangent':
             swc_path = 'neuron#255.lyp.swc'
             node_idx = 1936
+            plt.ion()
             WalkTreeTangent(swc_path, img_block_path, node_idx)
+            plt.show()
         elif sys.argv[1] == '--view':
-            swc_path = 'neuron#122.lyp.swc'
+            if len(sys.argv) == 2:
+                swc_path = 'neuron#122.lyp.swc'
+            else:
+                swc_path = sys.argv[2]
             cmip_viewer = TreeCircularMIPViewer(swc_path, img_block_path, 'pic_rm009_1.6.6')
-            cmip_viewer.ConstructCMIP(100)
+            cmip_viewer.ConstructCMIP(0)
+            plt.show()
         else:
             print('Hello?')
-        plt.show()
         sys.exit(0)
     else:
         s_swc_path = sys.argv[1:]
