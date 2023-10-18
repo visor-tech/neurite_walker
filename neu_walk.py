@@ -33,8 +33,8 @@ import scipy.ndimage
 import scipy.interpolate as interpolate
 
 import tifffile
-import SimpleITK as sitk
 import zarr
+import SimpleITK as sitk
 
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import xlabel, ylabel, title, figure
@@ -57,7 +57,7 @@ f_l_gamma = lambda a, g: np.uint16(((np.float64(a) - a.min()) / (a.max()-a.min()
 imgshow = lambda im, **kwval: plt.imshow(f_l_gamma(im, 3.0), cmap='gray', origin='lower', **kwval)
 
 def _idx_blk(p, b):
-    q = p + b   # if p is np array, b can be a number of array
+    q = p + b   # if p is np.array, b can be a number or an array
     return (slice(int(p[k]), int(q[k]))
             for k in range(len(p)))
     #return (slice(int(p[0]), int(q[0])),
@@ -303,6 +303,9 @@ def ExamBigImageContinuity():
     # Adopt solution 3.
 
 def WalkTreeTangent(swc_path, image_block_path, node_idx):
+    """
+    Plot the osculating plane of the swc at node_idx.
+    """
     
     ## prepare fiber position
 
@@ -338,7 +341,7 @@ def WalkTreeTangent(swc_path, image_block_path, node_idx):
     #ShowThreeViews(img3d, p_img_center_s)
     ShowThreeViewsMIP(img3d)
 
-    # load by lychnis block
+    # load lychnis block for comparison
     block_loader = OnDemandVolumeLoader()
     block_lym_path = 'RM009_traced_blocks/full_set/block.lym'
     block_loader.ImportLychnixVolume(block_lym_path)
@@ -419,6 +422,10 @@ class SmoothCurve:
         return a
 
     def PointTangent(self, t):
+        """
+        Return point coordinate and tangent vector at parameter t.
+        t can be a scalar or a numpy array. In the case of array, the last dim is the point coor and tangent.
+        """
         p = self(t)
         # get tanget vector
         dp = self(t, der=1)  # approximately we have ||dp|| = 1
@@ -428,6 +435,9 @@ class SmoothCurve:
         return p, dp
 
     def PointTangentNormal(self, t):
+        """
+        In addition to PointTangent, return the (unormalized) normal vector, its length is the curvature.
+        """
         p = self(t)
         # get tanget vector
         dp = self(t, der=1)  # approximately we have ||dp|| = 1
@@ -442,6 +452,9 @@ class SmoothCurve:
         return p, dp, ddp
 
     def FrenetFrame(self, t):
+        """
+        Return the point coordinate and the Frenet frame at parameter t.
+        """
         p, dp, ddp = self.PointTangentNormal(t)
         ddp = ddp / norm(ddp)
         return p, (dp, ddp, np.cross(dp, ddp))
@@ -593,6 +606,7 @@ class TreeCircularMIPViewer:
     def cmip_pos_to_coordinate(self, cmip_pos):
         if not hasattr(self, 'ntree'):
             self.init_swc()
+        # get position in terms of process id (id_proc) and path distance to starting point (local_pos)
         idx_proc = np.searchsorted(self.row_idxs, cmip_pos, 'right') - 1
         id_proc = self.proc_ids[idx_proc]
         local_pos = cmip_pos - self.row_idxs[id_proc]
@@ -600,8 +614,10 @@ class TreeCircularMIPViewer:
             print('Warning: Clicked in the gap.')
             local_pos = self.proc_img_s[id_proc].shape[0] - 1
         local_pos = local_pos * self.cmip_pixel_size_um
+        # construct the process curve, must be the same as in WalkProcessCircularMIP()
         proc_coor = self.ntree[1][self.processes[id_proc],:3]
         curve = SmoothCurve(proc_coor, spl_smooth=None)
+        # output position info
         print(f'id_proc: {id_proc}, local_pos: {local_pos:.1f} um')
         r = curve(local_pos)
         print(f'interpolated position: [{r[0]:.1f}, {r[1]:.1f}, {r[2]:.1f}]')
@@ -684,13 +700,6 @@ class TreeCircularMIPViewer:
             self.cmip_pos_to_coordinate(cmip_pos)
 
 if __name__ == '__main__':
-    #swc_path = 'neuron#255.lyp.swc'
-    # node_idx = 1936, node_id = 932514
-    # xyz: [52785.  28145.6 55668.9]
-    # Branch depth: 1
-    # Node depth: 1254
-    # Path length to root: 23228.5
-
     parser = argparse.ArgumentParser(
         description="Walk a neuron tree, generate and show its circular maximum intencity projection(MIP)."
     )
@@ -715,17 +724,22 @@ if __name__ == '__main__':
         print("Program arguments:")
         print(args)
 
-    interactive_mode = False
-    #block_lym_path = 'RM009_traced_blocks/full_set/block.lym'
     img_block_path = args.zarr_dir
     s_swc_path = args.swc_file_path
 
     if args.test:
+        #swc_path = 'neuron#255.lyp.swc'
+        # node_idx = 1936, node_id = 932514
+        # xyz: [52785.  28145.6 55668.9]
+        # Branch depth: 1
+        # Node depth: 1254
+        # Path length to root: 23228.5
         if args.test == 'slicing':
             plt.ion()
             Test3dImageSlicing()
             plt.show()
         elif args.test == 'tangent':
+            #IPython %run ./neu_walk.py 'neuron#255.lyp.swc' --test tangent
             swc_path = s_swc_path[0]
             node_idx = 1936
             plt.ion()
