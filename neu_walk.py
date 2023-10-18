@@ -1,5 +1,21 @@
 #!/usr/bin/env python3
-# add neu3dviewer to the path, we need some helper function in it
+
+# Usage notes:
+# * Prepare a directory named "pic_tmp" to hold output cMIP images
+# * Put external dependencies in directory "external", such as external/neu3dviewer
+# * See requirements.txt for required python packages.
+
+# To generate cMIP on a neuron, run the following command:
+# python neu_walk.py <neuron_swc_path>
+
+# To generate cMIP on a batch of neurons, run the following command (Linux only):
+# find <path_to_swc_directory> -type f -print0 | xargs -0 -P 8 -n 1 ./neu_walk.py
+
+# To view the resulting cMIP, run:
+# python neu_walk.py --view_swc <path_to_swc> --cmip_dir <path_to_cMIP_images_directory>
+
+# more options
+# --zarr_dir <path_to_zarr_block_directory>
 
 # tips in ipython
 #%reload_ext autoreload
@@ -8,6 +24,8 @@
 import os
 import sys
 import glob   # for list files
+import argparse
+
 import numpy as np
 from numpy import diff, sin, cos, pi, linspace
 from numpy.linalg import norm
@@ -24,6 +42,7 @@ from matplotlib.pyplot import xlabel, ylabel, title, figure
 # add path of current py file
 cur_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(cur_path, 'external/neu3dviewer'))
+# add neu3dviewer to the path, we need some helper function in it
 from neu3dviewer.data_loader import (
     LoadSWCTree, SplitSWCTree, SWCDFSSort, SWCNodeRelabel, GetUndirectedGraph,
     OnDemandVolumeLoader
@@ -546,7 +565,8 @@ class TreeCircularMIPViewer:
 
         # list and sort pic path
         self.tif_pathes = glob.glob(os.path.join(
-            self.pic_path, f'neuron#{self.neu_id}_rmip_*.tif'))
+            self.pic_path, f'neuron#{self.neu_id}_[rc]mip_*.tif'))
+        # sort, so that follow the order in the swc file.
         get_proc_id = lambda s: int(s.split('proc')[1].split('.')[0])
         self.tif_pathes = sorted(self.tif_pathes, key=get_proc_id)
         # process indexes
@@ -573,7 +593,8 @@ class TreeCircularMIPViewer:
     def cmip_pos_to_coordinate(self, cmip_pos):
         if not hasattr(self, 'ntree'):
             self.init_swc()
-        id_proc = np.searchsorted(self.row_idxs, cmip_pos, 'right') - 1
+        idx_proc = np.searchsorted(self.row_idxs, cmip_pos, 'right') - 1
+        id_proc = self.proc_ids[idx_proc]
         local_pos = cmip_pos - self.row_idxs[id_proc]
         if local_pos > self.proc_img_s[id_proc].shape[0]:
             print('Warning: Clicked in the gap.')
@@ -670,36 +691,51 @@ if __name__ == '__main__':
     # Node depth: 1254
     # Path length to root: 23228.5
 
+    parser = argparse.ArgumentParser(
+        description="Walk a neuron tree, generate and show its circular maximum intencity projection(MIP)."
+    )
+    parser.add_argument('swc_file_path', nargs='+',  # nargs='*'
+                        default='neuron#122.lyp.swc')
+    parser.add_argument('--zarr_dir',
+                        default='/mnt/xiaoyy/dataset/zarrblock',
+                        help='Path to the zarr directory')
+    parser.add_argument('--cmip_dir',
+                        default="pic_tmp/",
+                        help='Path to the circular MIP directory, for write or read (view mode)')
+    parser.add_argument('--view', action='store_true',
+                        default=False,
+                        help='Enable view mode')
+    parser.add_argument('--test',
+                        help='Test mode, not for general use')
+    parser.add_argument('--verbose', action='store_true',
+                        default=False,
+                        help='Show more information')
+    args = parser.parse_args()
+    if args.verbose:
+        print("Program arguments:")
+        print(args)
+
     interactive_mode = False
     #block_lym_path = 'RM009_traced_blocks/full_set/block.lym'
-    img_block_path = '/mnt/xiaoyy/dataset/zarrblock'
+    img_block_path = args.zarr_dir
+    s_swc_path = args.swc_file_path
 
-    if len(sys.argv) == 1:
-        s_swc_path = ['neuron#122.lyp.swc']
-    elif sys.argv[1].startswith('--'):
-        if sys.argv[1] == '--test_slicing':
+    if args.test:
+        if args.test == 'slicing':
             plt.ion()
             Test3dImageSlicing()
             plt.show()
-        elif sys.argv[1] == '--tangent':
-            swc_path = 'neuron#255.lyp.swc'
+        elif args.test == 'tangent':
+            swc_path = s_swc_path[0]
             node_idx = 1936
             plt.ion()
             WalkTreeTangent(swc_path, img_block_path, node_idx)
             plt.show()
-        elif sys.argv[1] == '--view':
-            if len(sys.argv) == 2:
-                swc_path = 'neuron#122.lyp.swc'
-            else:
-                swc_path = sys.argv[2]
-            cmip_viewer = TreeCircularMIPViewer(swc_path, img_block_path, 'pic_rm009_1.6.6')
+    elif args.view:
+        for swc_path in s_swc_path:
+            cmip_viewer = TreeCircularMIPViewer(swc_path, img_block_path, args.cmip_dir)
             cmip_viewer.ConstructCMIP(0)
             plt.show()
-        else:
-            print('Hello?')
-        sys.exit(0)
     else:
-        s_swc_path = sys.argv[1:]
-
-    for swc_path in s_swc_path:
-        WalkTreeCircularMIP(swc_path, img_block_path, 2)
+        for swc_path in s_swc_path:
+            WalkTreeCircularMIP(swc_path, img_block_path, 2)

@@ -1,0 +1,10 @@
+IPython
+joblib
+numpy
+scipy
+matplotlib
+vtk
+tifffile
+h5py
+zarr
+SimpleITK
