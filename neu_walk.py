@@ -12,10 +12,9 @@
 # find <path_to_swc_directory> -type f -print0 | xargs -0 -P 8 -n 1 ./neu_walk.py
 
 # To view the resulting cMIP, run:
-# python neu_walk.py --view_swc <path_to_swc> --cmip_dir <path_to_cMIP_images_directory>
+# python neu_walk.py --cmip_dir <path_to_cMIP_images_directory> --view <swc_path>
 
-# more options
-# --zarr_dir <path_to_zarr_block_directory>
+# for more options, see python neu_walk.py -h
 
 # tips in ipython
 #%reload_ext autoreload
@@ -585,6 +584,8 @@ class TreeCircularMIPViewer:
         # process indexes
         self.proc_ids = [get_proc_id(os.path.basename(s)) for s in self.tif_pathes]
         
+        if len(self.tif_pathes) == 0:
+            raise ValueError(f'No cMIP image found. Search path is "{self.pic_path}".')
         #print('\n'.join(self.tif_pathes))
         #print(self.proc_ids)
         self.cmip_pixel_size_um = 2.0
@@ -649,7 +650,7 @@ class TreeCircularMIPViewer:
 
         figure(301).clear()
         fig, axs = plt.subplots(n_screen_rows, num=301)
-        fig.suptitle(f'cMIP, neuron {self.neu_id}, pos {pos0} (max {row_idxs[-1]}))')
+        fig.suptitle(f'Neuron#{self.neu_id} circular MIP\n pos {pos0} - {pos0+screen_size} (of {row_idxs[0]} - {row_idxs[-1]})')
         # show the screen_img in split figure rows
         axshow = lambda axs, k, n, im, **kwval: \
             axs[k].imshow(f_l_gamma( \
