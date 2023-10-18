@@ -622,6 +622,9 @@ class TreeCircularMIPViewer:
         print(f'id_proc: {id_proc}, local_pos: {local_pos:.1f} um')
         r = curve(local_pos)
         print(f'interpolated position: [{r[0]:.1f}, {r[1]:.1f}, {r[2]:.1f}]')
+        idx_min = np.argmin(norm(proc_coor - r, axis=1))
+        node_id = self.ntree[0][self.processes[id_proc][idx_min],0]
+        print(f'nearest tree node id: {node_id} xyz: {proc_coor[idx_min]}')
     
     def ConstructCMIP(self, pos0, screen_size = 1000):
         proc_img_s = self.proc_img_s
