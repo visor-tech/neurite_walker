@@ -591,13 +591,17 @@ class TreeCircularMIPViewer:
         self.cmip_pixel_size_um = 2.0
         self.gap_size = 3
 
-        # load images and construct indexing
+        # load images and construct index (lookup table)
         self.proc_img_s = [tifffile.imread(s).T for s in self.tif_pathes]
         self.row_idxs = np.cumsum(_ha(0, _ai(
             [i.shape[0] + self.gap_size for i in self.proc_img_s])))
         self.img_height = self.proc_img_s[0].shape[1]
 
+        # default "brightness"
         self.screen_img_gamma = 3.0
+
+        # For denote clicked position
+        self.clicked_pos = []
     
     def init_swc(self):
         print('Loading swc...', end='')
@@ -651,6 +655,13 @@ class TreeCircularMIPViewer:
             id_img += 1
             i_bg = 0
 
+        clicked_pos = _a(self.clicked_pos)
+        b_click_in_local = (clicked_pos > pos0) & (clicked_pos < pos0 + screen_size)
+        local_clicked_pos = clicked_pos[b_click_in_local] - pos0
+
+        print(clicked_pos)
+        print(local_clicked_pos)
+
         figure(301).clear()
         fig, axs = plt.subplots(n_screen_rows, num=301)
         fig.suptitle(f'Neuron#{self.neu_id} circular MIP\n pos {pos0} - {pos0+screen_size} (of {row_idxs[0]} - {row_idxs[-1]})')
@@ -662,6 +673,11 @@ class TreeCircularMIPViewer:
                 cmap='gray', origin='lower', **kwval)
         for id_s in range(n_screen_rows):
             axshow(axs, id_s, n_screen_rows, screen_img)
+            step = screen_size/n_screen_rows
+            ck_idx = (step*id_s <= local_clicked_pos) & (local_clicked_pos < step*(id_s+1))
+            ck_pos = local_clicked_pos[ck_idx] - step*id_s
+            print(ck_pos)
+            axs[id_s].plot(ck_pos, img_height/2 * np.ones(len(ck_pos)), 'r+')
         fig.canvas.mpl_connect('key_press_event', self.on_cmip_key)
         fig.canvas.mpl_connect('button_press_event', self.on_cmip_mouse)
 
@@ -679,7 +695,8 @@ class TreeCircularMIPViewer:
             #plt.show()
             self.fig.canvas.draw()
         elif event.key == 'pageup':
-            self.ConstructCMIP(self.last_pos0 - int(self.screen_size/2))
+            if self.last_pos0 >= int(self.screen_size/2):
+                self.ConstructCMIP(self.last_pos0 - int(self.screen_size/2))
             #plt.show()
             self.fig.canvas.draw()
         elif event.key == '*':
@@ -692,16 +709,28 @@ class TreeCircularMIPViewer:
             self.ConstructCMIP(self.last_pos0)
             #plt.show()
             self.fig.canvas.draw()
+        elif event.key == 'z':
+            # revoke last clicked position
+            if len(self.clicked_pos) > 0:
+                self.clicked_pos.pop()
+                self.ConstructCMIP(self.last_pos0)
+                self.fig.canvas.draw()
+                print(f'(revoked, total {len(self.clicked_pos)})')
 
     def on_cmip_mouse(self, event):
-        if event.button == 1 and event.inaxes:
-            print('=== Left click ===')
+        if (event.button == 1 or event.button == 3) and event.inaxes:
+            print('=== Clicked ===')
             id_ax = list(self.axs).index(event.inaxes)
             cmip_pos = self.last_pos0 + id_ax * self.screen_size / self.n_screen_row + event.xdata
             #print(f' pos: {event.xdata}, {event.ydata}; screen pos {event.x}, {event.y}')
             #print(' ax id', id_ax)
             print(f'cmip_pos: {cmip_pos:.1f} pixel')
             self.cmip_pos_to_coordinate(cmip_pos)
+            if event.button == 3:
+                self.clicked_pos.append(cmip_pos)
+                self.ConstructCMIP(self.last_pos0)
+                self.fig.canvas.draw()
+                print(f'(recorded, total {len(self.clicked_pos)})')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
