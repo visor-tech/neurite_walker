@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 
-# Usage notes:
+## Before run:
 # * Prepare a directory named "pic_tmp" to hold output cMIP images
 # * Put external dependencies in directory "external", such as external/neu3dviewer
 # * See requirements.txt for required python packages.
 
-# To generate cMIP on a neuron, run the following command:
+## Usage:
+# To generate cMIP for a neuron, run the following command:
 # python neu_walk.py <neuron_swc_path>
 
-# To generate cMIP on a batch of neurons, run the following command (Linux only):
-# find <path_to_swc_directory> -type f -print0 | xargs -0 -P 8 -n 1 ./neu_walk.py
+# To generate cMIP for a batch of neurons, run the following command (Linux only):
+# find <path_to_swc_directory> -type f -print0 | xargs -0 -P 8 -n 1 ./neu_walk.py --zarr_dir <zarr_dir> --cmip_dir <cmip_dir>
 
 # To view the resulting cMIP, run:
 # python neu_walk.py --cmip_dir <path_to_cMIP_images_directory> --view <swc_path>
@@ -539,7 +540,7 @@ def LoadSWCTreeProcess(swc_path):
     #ngraph = GetUndirectedGraph(ntree)
     return ntree, processes
 
-def WalkTreeCircularMIP(swc_path, image_block_path, resolution):
+def WalkTreeCircularMIP(swc_path, image_block_path, cmip_dir, resolution):
     # get an ordered and continuous node index tree and its graph
     print("WalkTreeCircularMIP")
     ntree, processes = LoadSWCTreeProcess(swc_path)
@@ -563,7 +564,7 @@ def WalkTreeCircularMIP(swc_path, image_block_path, resolution):
             ylabel('distance to neurite (um)')
             title('circular MIP')
         
-        img_out_name = f'pic_tmp/{swc_name}_cmip_proc{idx_processes}.tif'
+        img_out_name = f'{cmip_dir}/{swc_name}_cmip_proc{idx_processes}.tif'
         tifffile.imwrite(img_out_name, axon_circular_mip.T)
 
 class TreeCircularMIPViewer:
@@ -785,4 +786,4 @@ if __name__ == '__main__':
             plt.show()
     else:
         for swc_path in s_swc_path:
-            WalkTreeCircularMIP(swc_path, img_block_path, 2)
+            WalkTreeCircularMIP(swc_path, img_block_path, args.cmip_dir, 2)
