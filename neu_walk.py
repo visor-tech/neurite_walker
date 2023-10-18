@@ -659,8 +659,8 @@ class TreeCircularMIPViewer:
         b_click_in_local = (clicked_pos > pos0) & (clicked_pos < pos0 + screen_size)
         local_clicked_pos = clicked_pos[b_click_in_local] - pos0
 
-        print(clicked_pos)
-        print(local_clicked_pos)
+        #print(clicked_pos)
+        #print(local_clicked_pos)
 
         figure(301).clear()
         fig, axs = plt.subplots(n_screen_rows, num=301)
@@ -676,7 +676,7 @@ class TreeCircularMIPViewer:
             step = screen_size/n_screen_rows
             ck_idx = (step*id_s <= local_clicked_pos) & (local_clicked_pos < step*(id_s+1))
             ck_pos = local_clicked_pos[ck_idx] - step*id_s
-            print(ck_pos)
+            #print(ck_pos)
             axs[id_s].plot(ck_pos, img_height/2 * np.ones(len(ck_pos)), 'r+')
         fig.canvas.mpl_connect('key_press_event', self.on_cmip_key)
         fig.canvas.mpl_connect('button_press_event', self.on_cmip_mouse)
