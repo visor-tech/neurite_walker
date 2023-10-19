@@ -21,11 +21,16 @@
 #%reload_ext autoreload
 #%autoreload 2
 
+# TODO:
+# Add context menu to plot
+# See https://matplotlib.org/stable/gallery/widgets/menu.html
+
 import os
 import sys
 import glob   # for list files
 import argparse
 from datetime import datetime
+import json
 
 import numpy as np
 from numpy import diff, sin, cos, pi, linspace
@@ -546,6 +551,47 @@ def LoadSWCTreeProcess(swc_path):
     #ngraph = GetUndirectedGraph(ntree)
     return ntree, processes
 
+class FileLogger:
+    """
+    Format:
+    [
+        {
+            'clicked_pos': cmip_pos,
+            'id_proc': id_proc,
+            'cmip_local_pos': local_pos,
+            'interpolated_pos': r,
+            'nearest_node_id': node_id,
+            'nearest_node_pos': proc_coor[idx_min],
+            't_str': t_str,
+        },
+        ...
+    ]
+    """
+    def __init__(self, file_path):
+        self.file_path = file_path
+        if os.path.isfile(file_path):
+            # read old logs as json
+            with open(file_path, 'r', encoding='utf-8') as fin:
+                self.logs = json.load(fin)
+        else:
+            self.logs = []
+    
+    def __len__(self):
+        return len(self.logs)
+    
+    def clicked_pos(self):
+        return [log['clicked_pos'] for log in self.logs]
+    
+    def Append(self, item):
+        self.logs.append(item)
+        with open(self.file_path, 'w', encoding='utf-8') as fout:
+            json.dump(self.logs, fout, indent=4)
+    
+    def Pop(self):
+        self.logs.pop()
+        with open(self.file_path, 'w', encoding='utf-8') as fout:
+            json.dump(self.logs, fout, indent=4)
+
 def WalkTreeCircularMIP(swc_path, image_block_path, cmip_dir, resolution):
     # get an ordered and continuous node index tree and its graph
     print("WalkTreeCircularMIP")
@@ -607,17 +653,16 @@ class TreeCircularMIPViewer:
         # default "brightness"
         self.screen_img_gamma = 3.0
 
-        # For denote clicked position
-        self.clicked_pos = []
-    
-    def init_swc(self):
         print('Loading swc...', end='')
         self.ntree, self.processes = LoadSWCTreeProcess(self.swc_path)
         print('done.')
+
+        #t_now_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        #f_pos_path = f'neuron#{self.neu_id}_cmip_marks_{t_now_str}.json'
+        f_pos_path = f'neuron#{self.neu_id}_cmip_marks.json'
+        self.logger = FileLogger(f_pos_path)
     
     def cmip_pos_to_coordinate(self, cmip_pos):
-        if not hasattr(self, 'ntree'):
-            self.init_swc()
         # get position in terms of process id (id_proc) and path distance to starting point (local_pos)
         idx_proc = np.searchsorted(self.row_idxs, cmip_pos, 'right') - 1
         id_proc = self.proc_ids[idx_proc]
@@ -636,6 +681,15 @@ class TreeCircularMIPViewer:
         idx_min = np.argmin(norm(proc_coor - r, axis=1))
         node_id = self.ntree[0][self.processes[id_proc][idx_min],0]
         print(f'nearest tree node id: {node_id} xyz: {proc_coor[idx_min]}')
+
+        info = {
+            'id_proc': id_proc,
+            'cmip_local_pos': local_pos,
+            'interpolated_pos': r.tolist(),
+            'nearest_node_id': int(node_id),
+            'nearest_node_pos': proc_coor[idx_min].tolist(),
+        }
+        return info
     
     def ConstructCMIP(self, pos0, screen_size = 1000):
         proc_img_s = self.proc_img_s
@@ -662,7 +716,7 @@ class TreeCircularMIPViewer:
             id_img += 1
             i_bg = 0
 
-        clicked_pos = _a([i[0] for i in self.clicked_pos])
+        clicked_pos = _a(self.logger.clicked_pos())
         b_click_in_local = (clicked_pos > pos0) & (clicked_pos < pos0 + screen_size)
         local_clicked_pos = clicked_pos[b_click_in_local] - pos0
 
@@ -695,14 +749,6 @@ class TreeCircularMIPViewer:
         self.screen_size = screen_size
         self.n_screen_row = n_screen_rows
 
-    def save_marks(self):
-        # save the recored position to a file
-        t_now_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        f_pos_path = f'neuron#{self.neu_id}_cmip_marks_{t_now_str}.txt'
-        with open(f_pos_path, 'w', encoding='utf-8') as fout:
-            for p, t in self.clicked_pos:
-                fout.write(f'{p:.1f} {t}\n')
-
     def on_cmip_key(self, event):
         print('key pressed:', event.key)
         if event.key == 'pagedown':
@@ -726,13 +772,11 @@ class TreeCircularMIPViewer:
             self.fig.canvas.draw()
         elif event.key == 'z':
             # revoke last clicked position
-            if len(self.clicked_pos) > 0:
-                self.clicked_pos.pop()
+            if len(self.logger) > 0:
                 self.ConstructCMIP(self.last_pos0)
                 self.fig.canvas.draw()
-                print(f'(revoked, total {len(self.clicked_pos)})')
-        elif event.key == 's':
-            self.save_marks()
+                self.logger.Pop()
+                print(f'(revoked, total {len(self.logger)})')
 
     def on_cmip_mouse(self, event):
         if (event.button == 1 or event.button == 3) and event.inaxes:
@@ -742,13 +786,17 @@ class TreeCircularMIPViewer:
             #print(f' pos: {event.xdata}, {event.ydata}; screen pos {event.x}, {event.y}')
             #print(' ax id', id_ax)
             print(f'cmip_pos: {cmip_pos:.1f} pixel')
-            self.cmip_pos_to_coordinate(cmip_pos)
+            info = self.cmip_pos_to_coordinate(cmip_pos)
             if event.button == 3:
                 t_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-                self.clicked_pos.append((cmip_pos, t_str))
+                self.logger.Append({'clicked_pos':cmip_pos, 't_str':t_str} | info)
                 self.ConstructCMIP(self.last_pos0)
                 self.fig.canvas.draw()
-                print(f'(recorded, total {len(self.clicked_pos)})')
+                print(f'(recorded, total {len(self.logger)})')
+            if event.key == 'v':
+                print('Opening Neu3DViewer...')
+                nt = {f'neuron#{self.neu_id}':self.ntree}
+                ViewByNeu3DViewer(nt, self.image_block_path, info['interpolated_pos'])
 
 def SaveSWC(fout_path, ntree, comments=''):
     with open(fout_path, 'w', encoding="utf-8") as fout:
@@ -764,6 +812,10 @@ def SaveSWC(fout_path, ntree, comments=''):
                        (nid, ty, x, y, z, di, pa))
 
 def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
+    """
+    Open Neu3DViewer to view the swc tree and image block.
+    named_ntree: named ntree in dict
+    """
     tmp_dir = '.tmp/'
     if not os.path.exists(tmp_dir):
         os.mkdir(tmp_dir)
@@ -776,6 +828,7 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
         SaveSWC(save_name, ntree)
     
     blk_sz = 128
+    r_center = _a(r_center)
     r0 = list(map(int, r_center - blk_sz/2))
     r1 = list(map(int, r_center + blk_sz/2))
     look_distance = blk_sz*3
@@ -799,7 +852,6 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
     fn2 = lambda gui: gui.interactor.style.ui_action. \
                         auto_brightness('')
     gui.Start([fn1, fn2])
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
