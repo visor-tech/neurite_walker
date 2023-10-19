@@ -43,9 +43,12 @@ from matplotlib.pyplot import xlabel, ylabel, title, figure
 plt.rcParams['keymap.save'] = ['ctrl+s']
 
 # add path of current py file
+pkg_path_neu3dviewer = 'external/neu3dviewer'
 cur_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(cur_path, 'external/neu3dviewer'))
-# add neu3dviewer to the path, we need some helper function in it
+sys.path.append(os.path.join(cur_path, pkg_path_neu3dviewer))
+# add neu3dviewer to the path, we need some helper functions in it
+import neu3dviewer.utils
+from neu3dviewer.img_block_viewer import GUIControl
 from neu3dviewer.data_loader import (
     LoadSWCTree, SplitSWCTree, SWCDFSSort, SWCNodeRelabel, GetUndirectedGraph,
     OnDemandVolumeLoader
@@ -696,9 +699,9 @@ class TreeCircularMIPViewer:
         # save the recored position to a file
         t_now_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         f_pos_path = f'neuron#{self.neu_id}_cmip_marks_{t_now_str}.txt'
-        with open(f_pos_path, 'w') as f:
+        with open(f_pos_path, 'w', encoding='utf-8') as fout:
             for p, t in self.clicked_pos:
-                f.write(f'{p:.1f} {t}\n')
+                fout.write(f'{p:.1f} {t}\n')
 
     def on_cmip_key(self, event):
         print('key pressed:', event.key)
@@ -747,11 +750,58 @@ class TreeCircularMIPViewer:
                 self.fig.canvas.draw()
                 print(f'(recorded, total {len(self.clicked_pos)})')
 
+def SaveSWC(fout_path, ntree, comments=''):
+    with open(fout_path, 'w', encoding="utf-8") as fout:
+        if len(comments) > 0:
+            fout.write(comments)
+            fout.write('\n')
+        for j in range(len(ntree[0])):
+            nid      = ntree[0][j,0]          # node id
+            pa       = ntree[0][j,1]          # parent
+            ty       = 2 if pa!=-1 else 0     # type
+            x,y,z,di = ntree[1][j,:]          # x,y,z, diameter
+            fout.write('%d %d %.1f %.1f %.1f %.3f %d\n' % \
+                       (nid, ty, x, y, z, di, pa))
+
+def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
+    tmp_dir = '.tmp/'
+    if not os.path.exists(tmp_dir):
+        os.mkdir(tmp_dir)
+    # remove all swc before hand
+    for f in glob.glob(os.path.join(tmp_dir, '*.swc')):
+        os.remove(f)
+    # save neuron trees to swc files
+    for name, ntree in named_ntree.items():
+        save_name = os.path.join(tmp_dir, name + '.swc')
+        SaveSWC(save_name, ntree)
+    
+    blk_sz = 128
+    r0 = list(map(int, r_center - blk_sz/2))
+    r1 = list(map(int, r_center + blk_sz/2))
+
+    # see help of Neu3DViewer for possible options
+    cmd_obj_desc = {
+        'swc_dir' : tmp_dir,
+        'img_path': zarr_dir,
+        'range'   : f'[{r0[0]}:{r1[0]}, {r0[1]}:{r1[1]}, {r0[2]}:{r1[2]}]',
+        'origin'  : str(list(r0)),
+        #'look_at' : str(list(r_center)),
+        #'look_distance': 300,
+    }
+    # call Neu3DViewer
+    neu3dviewer.utils.debug_level = 2
+    gui = GUIControl()
+    gui.EasyObjectImporter(cmd_obj_desc)
+    gui.Set3DCursor(r_center)
+    fn = lambda gui: gui.interactor.style.ui_action.scene_look_at(r_center, 300)
+    gui.Start(fn)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Walk a neuron tree, generate and show its circular maximum intencity projection(MIP)."
     )
-    parser.add_argument('swc_file_path', nargs='+',  # nargs='*'
+    parser.add_argument('swc_file_path', nargs='*',  # nargs='*' or '+'
                         default='neuron#122.lyp.swc')
     parser.add_argument('--zarr_dir',
                         default='/mnt/xiaoyy/dataset/zarrblock',
@@ -793,6 +843,11 @@ if __name__ == '__main__':
             plt.ion()
             WalkTreeTangent(swc_path, img_block_path, node_idx)
             plt.show()
+        elif args.test == 'neu3dviewer':
+            swc_path = 'neuron#255.lyp.swc'
+            ntree = LoadSWCTree(swc_path)
+            r_c = _a([52785., 28145.6, 55668.9])
+            ViewByNeu3DViewer({'abc': ntree}, img_block_path, r_c)
     elif args.view:
         for swc_path in s_swc_path:
             cmip_viewer = TreeCircularMIPViewer(swc_path, img_block_path, args.cmip_dir)
