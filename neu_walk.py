@@ -25,6 +25,7 @@ import os
 import sys
 import glob   # for list files
 import argparse
+from datetime import datetime
 
 import numpy as np
 from numpy import diff, sin, cos, pi, linspace
@@ -38,6 +39,8 @@ import SimpleITK as sitk
 
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import xlabel, ylabel, title, figure
+
+plt.rcParams['keymap.save'] = ['ctrl+s']
 
 # add path of current py file
 cur_path = os.path.dirname(os.path.abspath(__file__))
@@ -656,7 +659,7 @@ class TreeCircularMIPViewer:
             id_img += 1
             i_bg = 0
 
-        clicked_pos = _a(self.clicked_pos)
+        clicked_pos = _a([i[0] for i in self.clicked_pos])
         b_click_in_local = (clicked_pos > pos0) & (clicked_pos < pos0 + screen_size)
         local_clicked_pos = clicked_pos[b_click_in_local] - pos0
 
@@ -689,6 +692,14 @@ class TreeCircularMIPViewer:
         self.screen_size = screen_size
         self.n_screen_row = n_screen_rows
 
+    def save_marks(self):
+        # save the recored position to a file
+        t_now_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        f_pos_path = f'neuron#{self.neu_id}_cmip_marks_{t_now_str}.txt'
+        with open(f_pos_path, 'w') as f:
+            for p, t in self.clicked_pos:
+                f.write(f'{p:.1f} {t}\n')
+
     def on_cmip_key(self, event):
         print('key pressed:', event.key)
         if event.key == 'pagedown':
@@ -717,6 +728,8 @@ class TreeCircularMIPViewer:
                 self.ConstructCMIP(self.last_pos0)
                 self.fig.canvas.draw()
                 print(f'(revoked, total {len(self.clicked_pos)})')
+        elif event.key == 's':
+            self.save_marks()
 
     def on_cmip_mouse(self, event):
         if (event.button == 1 or event.button == 3) and event.inaxes:
@@ -728,7 +741,8 @@ class TreeCircularMIPViewer:
             print(f'cmip_pos: {cmip_pos:.1f} pixel')
             self.cmip_pos_to_coordinate(cmip_pos)
             if event.button == 3:
-                self.clicked_pos.append(cmip_pos)
+                t_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+                self.clicked_pos.append((cmip_pos, t_str))
                 self.ConstructCMIP(self.last_pos0)
                 self.fig.canvas.draw()
                 print(f'(recorded, total {len(self.clicked_pos)})')
