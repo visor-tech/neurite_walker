@@ -795,7 +795,7 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
     gui.EasyObjectImporter(cmd_obj_desc)
     gui.Set3DCursor(r_center)
     fn1 = lambda gui: gui.interactor.style.ui_action. \
-                      scene_look_at(r_center, look_distance)
+                        scene_look_at(r_center, look_distance)
     fn2 = lambda gui: gui.interactor.style.ui_action. \
                         auto_brightness('')
     gui.Start([fn1, fn2])
@@ -848,7 +848,8 @@ if __name__ == '__main__':
             WalkTreeTangent(swc_path, img_block_path, node_idx)
             plt.show()
         elif args.test == 'neu3dviewer':
-            swc_path = 'neuron#255.lyp.swc'
+            #swc_path = 'neuron#255.lyp.swc'
+            swc_path = s_swc_path[0]
             ntree = LoadSWCTree(swc_path)
             r_c = _a([52785., 28145.6, 55668.9])
             ViewByNeu3DViewer({'abc': ntree}, img_block_path, r_c)
