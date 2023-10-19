@@ -778,6 +778,7 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
     blk_sz = 128
     r0 = list(map(int, r_center - blk_sz/2))
     r1 = list(map(int, r_center + blk_sz/2))
+    look_distance = blk_sz*3
 
     # see help of Neu3DViewer for possible options
     cmd_obj_desc = {
@@ -786,15 +787,18 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
         'range'   : f'[{r0[0]}:{r1[0]}, {r0[1]}:{r1[1]}, {r0[2]}:{r1[2]}]',
         'origin'  : str(list(r0)),
         #'look_at' : str(list(r_center)),
-        #'look_distance': 300,
+        #'look_distance': look_distance,
     }
     # call Neu3DViewer
     neu3dviewer.utils.debug_level = 2
     gui = GUIControl()
     gui.EasyObjectImporter(cmd_obj_desc)
     gui.Set3DCursor(r_center)
-    fn = lambda gui: gui.interactor.style.ui_action.scene_look_at(r_center, 300)
-    gui.Start(fn)
+    fn1 = lambda gui: gui.interactor.style.ui_action. \
+                      scene_look_at(r_center, look_distance)
+    fn2 = lambda gui: gui.interactor.style.ui_action. \
+                        auto_brightness('')
+    gui.Start([fn1, fn2])
 
 
 if __name__ == '__main__':
