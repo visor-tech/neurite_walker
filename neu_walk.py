@@ -26,7 +26,7 @@
 # * Add context menu to plot, allow choose error type, and more natural interaction
 #   See https://matplotlib.org/stable/gallery/widgets/menu.html
 # * Show smoothed curve in 3D view
-# * Fix neu3dviewer parallel load bug in windows
+# * Use um unit in Viewer and axis labels
 
 import os
 import sys
@@ -624,7 +624,7 @@ def WalkTreeCircularMIP(swc_path, image_block_path, cmip_dir, resolution):
         tifffile.imwrite(img_out_name, axon_circular_mip.T)
 
 class TreeCircularMIPViewer:
-    def __init__(self, swc_path, image_block_path, pic_path):
+    def __init__(self, swc_path, image_block_path, pic_path, res = 2.0):
         self.swc_path = swc_path
         self.image_block_path = image_block_path
         self.pic_path = pic_path
@@ -645,7 +645,7 @@ class TreeCircularMIPViewer:
             raise ValueError(f'No cMIP image found. Search path is "{self.pic_path}".')
         #print('\n'.join(self.tif_pathes))
         #print(self.proc_ids)
-        self.cmip_pixel_size_um = 2.0
+        self.cmip_res = res
         self.gap_size = 3
 
         # load images and construct index (lookup table)
@@ -674,7 +674,7 @@ class TreeCircularMIPViewer:
         if local_pos > self.proc_img_s[id_proc].shape[0]:
             print('Warning: Clicked in the gap.')
             local_pos = self.proc_img_s[id_proc].shape[0] - 1
-        local_pos = local_pos * self.cmip_pixel_size_um
+        local_pos = local_pos * self.cmip_res
         # construct the process curve, must be the same as in WalkProcessCircularMIP()
         proc_coor = self.ntree[1][self.processes[id_proc],:3]
         curve = SmoothCurve(proc_coor, spl_smooth=None)
@@ -694,6 +694,19 @@ class TreeCircularMIPViewer:
             'nearest_node_pos': proc_coor[idx_min].tolist(),
         }
         return info
+    
+    def LocalCurveToNTree(self, id_proc, local_cmip_pos, length_range):
+        proc_coor = self.ntree[1][self.processes[id_proc],:3]
+        curve = SmoothCurve(proc_coor, spl_smooth=None)
+        bg_pos = 0 if local_cmip_pos < length_range else local_cmip_pos - length_range
+        ed_pos = curve.length() if curve.length() - local_cmip_pos < length_range else local_cmip_pos + length_range
+        s_idx = _ai(range(int(bg_pos/self.cmip_res), int(ed_pos/self.cmip_res)))
+        coor = curve(s_idx * self.cmip_res)
+        nt =(
+                _ai([(s_idx[k], s_idx[k-1] if k>=1 else -1, 3) for k in range(len(s_idx))]),
+                _a ([(coor[k,0], coor[k,1], coor[k,2], 1.0)  for k in range(len(s_idx))])
+            )
+        return nt
     
     def ConstructCMIP(self, pos0, screen_size = 1000):
         proc_img_s = self.proc_img_s
@@ -813,7 +826,13 @@ class TreeCircularMIPViewer:
             if event.key == 'v':
                 self.fig.canvas.flush_events()
                 print('Opening Neu3DViewer...')
-                nt = {f'neuron#{self.neu_id}':self.ntree}
+                nt = {
+                    f'neuron#{self.neu_id}':self.ntree,
+                    'smoothed': self.LocalCurveToNTree(
+                        info['id_proc'],
+                        info['cmip_local_pos'],
+                        self.cmip_res * self.img_height * 0.6),
+                }
                 ViewByNeu3DViewer(nt, self.image_block_path, info['interpolated_pos'])
 
 def SaveSWC(fout_path, ntree, comments=''):
@@ -869,7 +888,9 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
                         scene_look_at(r_center, look_distance)
     fn2 = lambda gui: gui.interactor.style.ui_action. \
                         auto_brightness('')
-    gui.Start([fn1, fn2])
+    def fn3(gui):
+        gui: gui.scene_objects['swc.2'].color = 'blue'
+    gui.Start([fn1, fn2, fn3])
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
