@@ -756,12 +756,24 @@ class TreeCircularMIPViewer:
     def on_cmip_key(self, event):
         print('key pressed:', event.key)
         if event.key == 'pagedown':
-            self.ConstructCMIP(self.last_pos0 + int(self.screen_size/2))
+            self.ConstructCMIP(self.last_pos0 + self.screen_size)
             #plt.show()
             self.fig.canvas.draw()
         elif event.key == 'pageup':
             if self.last_pos0 >= int(self.screen_size/2):
-                self.ConstructCMIP(self.last_pos0 - int(self.screen_size/2))
+                self.ConstructCMIP(self.last_pos0 - self.screen_size)
+            #plt.show()
+            self.fig.canvas.draw()
+        if event.key == ' ':
+            self.ConstructCMIP(self.last_pos0 + int(self.screen_size/2))
+            #plt.show()
+            self.fig.canvas.draw()
+        if event.key == 'home':
+            self.ConstructCMIP(0)
+            #plt.show()
+            self.fig.canvas.draw()
+        if event.key == 'end':
+            self.ConstructCMIP(self.row_idxs[-1] - self.screen_size)
             #plt.show()
             self.fig.canvas.draw()
         elif event.key == '*':
@@ -798,6 +810,7 @@ class TreeCircularMIPViewer:
                 self.fig.canvas.draw()
                 print(f'(recorded, total {len(self.logger)})')
             if event.key == 'v':
+                self.fig.canvas.flush_events()
                 print('Opening Neu3DViewer...')
                 nt = {f'neuron#{self.neu_id}':self.ntree}
                 ViewByNeu3DViewer(nt, self.image_block_path, info['interpolated_pos'])
