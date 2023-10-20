@@ -49,6 +49,7 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import xlabel, ylabel, title, figure
 
 plt.rcParams['keymap.save'] = ['ctrl+s']
+plt.rcParams['keymap.quit'] = ['ctrl+w', 'cmd+w']
 
 # add path of current py file
 pkg_path_neu3dviewer = 'external/neu3dviewer'
