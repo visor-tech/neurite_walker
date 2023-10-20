@@ -4,6 +4,7 @@
 # * Prepare a directory named "pic_tmp" to hold output cMIP images
 # * Put external dependencies in directory "external", such as external/neu3dviewer
 # * See requirements.txt for required python packages.
+# * need python3.11
 
 ## Usage:
 # To generate cMIP for a neuron, run the following command:
@@ -22,8 +23,10 @@
 #%autoreload 2
 
 # TODO:
-# Add context menu to plot
-# See https://matplotlib.org/stable/gallery/widgets/menu.html
+# * Add context menu to plot, allow choose error type, and more natural interaction
+#   See https://matplotlib.org/stable/gallery/widgets/menu.html
+# * Show smoothed curve in 3D view
+# * Fix neu3dviewer parallel load bug in windows
 
 import os
 import sys
@@ -722,6 +725,7 @@ class TreeCircularMIPViewer:
 
         #print(clicked_pos)
         #print(local_clicked_pos)
+        #print(len(self.logger))
 
         figure(301).clear()
         fig, axs = plt.subplots(n_screen_rows, num=301)
@@ -773,9 +777,9 @@ class TreeCircularMIPViewer:
         elif event.key == 'z':
             # revoke last clicked position
             if len(self.logger) > 0:
+                self.logger.Pop()
                 self.ConstructCMIP(self.last_pos0)
                 self.fig.canvas.draw()
-                self.logger.Pop()
                 print(f'(revoked, total {len(self.logger)})')
 
     def on_cmip_mouse(self, event):
