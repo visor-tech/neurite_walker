@@ -907,6 +907,8 @@ if __name__ == '__main__':
     parser.add_argument('--view', action='store_true',
                         default=False,
                         help='Enable view mode')
+    parser.add_argument('--res', type=float,
+                        help='resolution')
     parser.add_argument('--test',
                         help='Test mode, not for general use')
     parser.add_argument('--verbose', action='store_true',
@@ -951,4 +953,5 @@ if __name__ == '__main__':
             plt.show()
     else:
         for swc_path in s_swc_path:
-            WalkTreeCircularMIP(swc_path, img_block_path, args.cmip_dir, 2)
+            WalkTreeCircularMIP(swc_path, img_block_path,
+                                args.cmip_dir, args.res)
