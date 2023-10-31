@@ -400,8 +400,8 @@ class SmoothCurve:
         """
         piece_len = norm(diff(rp, axis=0), axis=1)
         if np.any(piece_len == 0):
-            print('Warning: redundant point(s), ignoring.')
-            # get only the unique points
+            print('Warning: repeated point(s), ignoring.')
+            # leave only the non-repeated points
             rp = rp[_ha(True, piece_len>0)]
             piece_len = norm(diff(rp, axis=0), axis=1)
         if len(rp) <=3:
@@ -475,19 +475,27 @@ class SmoothCurve:
         return p, (dp, ddp, np.cross(dp, ddp))
 
 def WalkProcessCircularMIP(process_pos, image_block_path, interp_resolution = 2):
-    # interpolation the process by a smooth curve
-    curve = SmoothCurve(process_pos, spl_smooth=None)
     blk_sz = 128
+
+    radius_max_soft = blk_sz / 2
+    radius_step = interp_resolution
+    n_radius = int(radius_max_soft / radius_step) + 1
+
     zimg = zarr.open(image_block_path, mode='r')
+
+    try:
+        # interpolation the process by a smooth curve
+        curve = SmoothCurve(process_pos, spl_smooth=None)
+    except ValueError:
+        print('Warning: (looks like) the process too short! ignoring.')
+        print('Processes coordinate:\n', process_pos)
+        extent = [0, len(process_pos), 0, n_radius*radius_step]
+        return np.zeros((len(process_pos), n_radius), dtype=zimg.dtype), extent
 
     # parameters for getting points to be inspected
     t_step = interp_resolution
     n_t = int(curve.length() / t_step) + 1
     t_interp = np.linspace(0, curve.length(), n_t)
-
-    radius_max_soft = blk_sz / 2
-    radius_step = interp_resolution
-    n_radius = int(radius_max_soft / radius_step) + 1
 
     if 0:
         fig = figure(200)
@@ -508,10 +516,10 @@ def WalkProcessCircularMIP(process_pos, image_block_path, interp_resolution = 2)
     axon_circular_mip = np.zeros((n_t, n_radius), dtype=zimg.dtype)
     for idx_c_k in range(n_t):
         p, dp, ddp = curve.PointTangentNormal(t_interp[idx_c_k])
-        p, frame = curve.FrenetFrame(t_interp[idx_c_k])
         #print('p =', p)
 
         if 0:
+            p, frame = curve.FrenetFrame(t_interp[idx_c_k])
             # get the normal-plane image
             timg = SliceZarrImage(zimg, blk_sz, p, frame[2], frame[1])
             figure(201)
@@ -603,7 +611,7 @@ def WalkTreeCircularMIP(swc_path, image_block_path, cmip_dir, resolution):
 
     swc_name = os.path.basename(swc_path).split('.')[0]
     print('SWC name:', swc_name)
-    print('Number of porceeses:', len(processes))
+    print('Number of processes:', len(processes))
     print('Number of nodes:', len(ntree[0]))
 
     for idx_processes in range(len(processes)):
