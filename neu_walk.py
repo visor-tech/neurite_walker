@@ -52,15 +52,17 @@ plt.rcParams['keymap.save'] = ['ctrl+s']
 plt.rcParams['keymap.quit'] = ['ctrl+w', 'cmd+w']
 
 # add path of current py file
-pkg_path_neu3dviewer = 'external/neu3dviewer'
+pkg_path_neu3dviewer_rel = 'external/neu3dviewer'
 cur_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(cur_path, pkg_path_neu3dviewer))
+pkg_path_neu3dviewer = os.path.join(cur_path, pkg_path_neu3dviewer_rel)
+sys.path.append(pkg_path_neu3dviewer)
 # add neu3dviewer to the path, we need some helper functions in it
 import neu3dviewer.utils
 from neu3dviewer.img_block_viewer import GUIControl
 from neu3dviewer.data_loader import (
     dtype_id, dtype_coor,
     LoadSWCTree, SplitSWCTree, SWCDFSSort, SWCNodeRelabel, GetUndirectedGraph,
+    SimplifyTreeWithDepth,
     OnDemandVolumeLoader
 )
 
@@ -566,7 +568,7 @@ def LoadSWCTreeProcess(swc_path, sort_processes = True):
     return ntree, processes
 
 class NTreeOps:
-    def __init__(self, swc_path, sort_proc = False):
+    def __init__(self, swc_path, sort_proc = True):
         self.ntree, self.processes = LoadSWCTreeProcess(swc_path, sort_proc)
         # get a tree with consitive node index
         self.tr_idx, self.map_id_idx = SWCNodeRelabel(self.ntree, output_map=True)
@@ -613,11 +615,25 @@ class NTreeOps:
         self.n_child = n_child
 
     def branch_depth(self, node_id):
+        """
+        Return the branch depth of the node (ID).
+        Demo tree (0 is the root):
+        0 -- 1 -- 2 -- 3
+              \
+               4
+        Node ID : Branch depth
+          0     :   0
+          1     :   1
+          2     :   2
+          3     :   2
+          4     :   2
+        """
         # TODO: check id validity
         if isinstance(node_id, int) or isinstance(node_id[0], int):
             return self.v_branch_depth[self.map_id_idx[node_id]]
         else:
             # assume list or array, i.e. node_id is processes
+            # Note: in this case, processes is idx instead of id
             processes = node_id
             node_id = self.map_idx_id[_ai([p[-1] for p in processes])]
             return self.v_branch_depth[self.map_id_idx[node_id]]
@@ -633,7 +649,7 @@ class NTreeOps:
         return self.node_root_path_length[self.map_id_idx[node_id]]
 
 def test_ntreeops():
-    swc_path = '/home/xyy/code/py/vtk_test/tests/ref_data/swc_ext/t3.3.swc'
+    swc_path = os.path.join(pkg_path_neu3dviewer, 'tests/ref_data/swc_ext/t3.3.swc')
     ntrop = NTreeOps(swc_path, True)
     # test reading a tree
     assert(len(ntrop.ntree[0]) == 16)
@@ -687,6 +703,15 @@ def test_ntreeops():
     # test end_point
     assert(np.all(ntrop.end_point([pc1, pc2]) == [2, 13]))
 
+def test_tree_filter(swc_path):
+    ntrop = NTreeOps(swc_path)
+    #print(len(ntrop.processes))
+    dep = ntrop.branch_depth(ntrop.processes)
+    #print(dep)
+    dep_ref = SimplifyTreeWithDepth(ntrop.processes)[:,2]
+    assert(np.all(dep == dep_ref[1:]))
+    print((dep <= 3) &
+          (ntrop.path_length_to_root(ntrop.end_point(ntrop.processes)) > 1000))
 
 class FileLogger:
     """
@@ -1081,6 +1106,9 @@ if __name__ == '__main__':
             ViewByNeu3DViewer({'abc': ntree}, img_block_path, r_c)
         elif args.test == 'ntreeops':
             test_ntreeops()
+        elif args.test == 'tree_filter':
+            swc_path = s_swc_path[0]
+            test_tree_filter(swc_path)
     elif args.view:
         for swc_path in s_swc_path:
             cmip_viewer = TreeCircularMIPViewer(swc_path, img_block_path, args.cmip_dir)
