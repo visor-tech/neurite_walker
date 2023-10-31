@@ -59,6 +59,7 @@ sys.path.append(os.path.join(cur_path, pkg_path_neu3dviewer))
 import neu3dviewer.utils
 from neu3dviewer.img_block_viewer import GUIControl
 from neu3dviewer.data_loader import (
+    dtype_id, dtype_coor,
     LoadSWCTree, SplitSWCTree, SWCDFSSort, SWCNodeRelabel, GetUndirectedGraph,
     OnDemandVolumeLoader
 )
@@ -554,14 +555,138 @@ def WalkProcessCircularMIP(process_pos, image_block_path, interp_resolution = 2)
     extent = [0, curve.length(), 0, n_radius*radius_step]
     return axon_circular_mip, extent
     
-def LoadSWCTreeProcess(swc_path):
+def LoadSWCTreeProcess(swc_path, sort_processes = True):
     ntree = LoadSWCTree(swc_path)
     processes = SplitSWCTree(ntree)
-    ntree, processes = SWCDFSSort(ntree, processes)
+    if sort_processes:
+        ntree, processes = SWCDFSSort(ntree, processes)
     #tr_idx = SWCNodeRelabel(ntree)
     #ntree = (tr_idx, ntree[1])
     #ngraph = GetUndirectedGraph(ntree)
     return ntree, processes
+
+class NTreeOps:
+    def __init__(self, swc_path, sort_proc = False):
+        self.ntree, self.processes = LoadSWCTreeProcess(swc_path, sort_proc)
+        # get a tree with consitive node index
+        self.tr_idx, self.map_id_idx = SWCNodeRelabel(self.ntree, output_map=True)
+        self.map_idx_id = self.ntree[0][:,0]
+        self.ntree_cons = (self.tr_idx, self.ntree[1])
+        # get the graph of the tree
+        self.ngraph = GetUndirectedGraph(self.ntree)
+        self.build_tree_depth()
+    
+    def build_tree_depth(self):
+        # find roots
+        root_idx = np.flatnonzero(self.tr_idx[:, 1] == -1)  # assume relabel is perfect
+        # find branch/leaf points
+        n_id = self.tr_idx.shape[0]      # number of nodes
+        n_child,_ = np.histogram(self.tr_idx[:, 1],
+                        bins = np.arange(-1, n_id + 1, dtype=dtype_id))
+        assert(n_child[0] == len(root_idx))
+        # leave out the node '-1'
+        n_child = np.array(n_child[1:], dtype=dtype_id)
+        # n_child == 0: leaf
+        # n_child == 1: middle of a path or root(?)
+        # n_child >= 2: branch point or root(?)
+        node_depth = np.zeros((n_id, 2), dtype=dtype_id)
+        node_depth[root_idx] = 0
+        node_root_path_length = np.zeros(n_id, dtype=dtype_coor)
+        root_n_child = n_child[root_idx]    # we still need this
+        n_child[root_idx] = -1              # let's label the root
+        for k in range(n_id):
+            if n_child[k] == -1:
+                continue
+            # add depth on top of parent
+            p_idx = self.tr_idx[k, 1]
+            node_depth[k, 0] = node_depth[p_idx, 0] + 1
+            node_depth[k, 1] = node_depth[p_idx, 1] + (n_child[p_idx] != 1)
+            node_root_path_length[k] += node_root_path_length[p_idx] + \
+                norm(self.ntree[1][k, :3] - self.ntree[1][p_idx, :3])
+
+        n_child[root_idx] = root_n_child
+        self.root_idx = root_idx
+        self.node_depthes = node_depth
+        self.v_node_depth = node_depth[:,0]
+        self.v_branch_depth = node_depth[:,1]
+        self.node_root_path_length = node_root_path_length
+        self.n_child = n_child
+
+    def branch_depth(self, node_id):
+        # TODO: check id validity
+        if isinstance(node_id, int) or isinstance(node_id[0], int):
+            return self.v_branch_depth[self.map_id_idx[node_id]]
+        else:
+            # assume list or array, i.e. node_id is processes
+            processes = node_id
+            node_id = self.map_idx_id[_ai([p[-1] for p in processes])]
+            return self.v_branch_depth[self.map_id_idx[node_id]]
+
+    def end_point(self, processes):
+        """
+        Return the end point of the processes.
+        """
+        return self.map_idx_id[_ai([p[-1] for p in processes])]
+
+    def path_length_to_root(self, node_id):
+        # TODO: check id validity
+        return self.node_root_path_length[self.map_id_idx[node_id]]
+
+def test_ntreeops():
+    swc_path = '/home/xyy/code/py/vtk_test/tests/ref_data/swc_ext/t3.3.swc'
+    ntrop = NTreeOps(swc_path, True)
+    # test reading a tree
+    assert(len(ntrop.ntree[0]) == 16)
+    assert(len(ntrop.ntree[1]) == 16)
+    assert(len(ntrop.processes) == 10)
+    # test map_id_idx
+    n_id  = 6
+    n_idx = ntrop.map_id_idx[n_id]
+    assert(n_idx == 5)
+    np_idx = ntrop.ntree_cons[0][n_idx, 1]
+    assert(ntrop.ntree[0][np_idx, 0] == 7)
+    assert(norm(ntrop.ntree[1][np_idx,:3] - _a([2,0,0])) == 0)
+    # test ngraph
+    true_pairs = [(7, 6), (6, 7), (8, 0), (12, 13)]
+    false_pairs = [(1,1), (13, 14), (1, 3)]
+    for pr in true_pairs:
+        idx_pr = ntrop.map_id_idx[_ai(pr)]
+        assert(ntrop.ngraph[*idx_pr] == True)
+    for pr in false_pairs:
+        idx_pr = ntrop.map_id_idx[_ai(pr)]
+        assert(ntrop.ngraph[*idx_pr] == False)
+    # test depth
+    ans = np.array([
+       [11,  0,  0],
+       [ 1,  0,  0],
+       [ 4,  1,  1],
+       [ 3,  2,  2],
+       [ 7,  2,  2],
+       [ 6,  3,  3],
+       [ 9,  3,  3],
+       [ 2,  4,  3],
+       [12,  0,  0],
+       [13,  1,  1],
+       [17,  0,  0],
+       [18,  1,  1],
+       [ 0,  0,  0],
+       [ 8,  1,  1],
+       [10,  2,  2],
+       [19,  2,  2]
+    ])
+    for i, d1, d2 in ans:
+        #print(i, d1, d2)
+        assert(norm(ntrop.node_depthes[ntrop.map_id_idx[i],:] - _a([d1, d2])) == 0)
+    assert(ntrop.node_root_path_length[ntrop.map_id_idx[2]] - (np.sqrt(1 + 0.01)*2 + 2) < 1e-6)
+    # test branch_depth
+    assert(ntrop.branch_depth(2) == 3)
+    assert(ntrop.branch_depth([2]) == 3)
+    pc1 = ntrop.map_id_idx[_ai([7,9,2])]
+    pc2 = ntrop.map_id_idx[_ai([12,13])]
+    assert(np.all(ntrop.branch_depth([pc1, pc2]) == [3, 1]))
+    # test end_point
+    assert(np.all(ntrop.end_point([pc1, pc2]) == [2, 13]))
+
 
 class FileLogger:
     """
@@ -954,6 +1079,8 @@ if __name__ == '__main__':
             ntree = LoadSWCTree(swc_path)
             r_c = _a([52785., 28145.6, 55668.9])
             ViewByNeu3DViewer({'abc': ntree}, img_block_path, r_c)
+        elif args.test == 'ntreeops':
+            test_ntreeops()
     elif args.view:
         for swc_path in s_swc_path:
             cmip_viewer = TreeCircularMIPViewer(swc_path, img_block_path, args.cmip_dir)
