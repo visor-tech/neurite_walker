@@ -1,0 +1,8 @@
+{
+  "zarr_dir": "/home/xyy/dataset/RM009/blk128_neu172_sps231010.zarr/",
+  "res": 1.0,
+  "cmip_dir": "/home/xyy/dataset/RM009/cmip_swc172_res1",
+  "swc_file_path": ["/home/xyy/dataset/RM009/swc1.7.2_largest/neuron#220.lyp.swc"],
+  "filter": "",
+  "view": true
+}

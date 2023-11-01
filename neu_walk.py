@@ -833,10 +833,15 @@ class TreeCircularMIPViewer:
         #print('\n'.join(self.tif_pathes))
         #print(self.proc_ids)
 
+        if len(self.processes) != len(self.tif_pathes):
+            print('__________________________________________________________')
+            print('Warning: number of processes != number of cMIP')
+            print('Indicating cMIPs are not complete or not the same version.')
+            print('Proceed anyway.')
+            print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
         print(f'Filtering according to "{filter_str}" ...', end='')
-        assert(len(self.processes) == len(self.tif_pathes))
         vec_filted = exec_filter_string(filter_str, self.ntrop)
-        n_proc = len(self.processes)
+        n_proc = len(self.tif_pathes)
         self.tif_pathes = [self.tif_pathes[i] for i in range(n_proc) if vec_filted[self.proc_ids[i]]]
         self.proc_ids   = [self.proc_ids[i]   for i in range(n_proc) if vec_filted[self.proc_ids[i]]]
         print(f'done. {len(self.tif_pathes)} processes left.')
@@ -1086,7 +1091,7 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
         gui: gui.scene_objects['swc.2'].color = 'blue'
     gui.Start([fn1, fn2, fn3])
 
-if __name__ == '__main__':
+def get_program_options():
     parser = argparse.ArgumentParser(
         description="Walk a neuron tree, generate and show its circular maximum intencity projection(MIP)."
     )
@@ -1139,6 +1144,7 @@ if __name__ == '__main__':
     # set default values
     default_opt = {
         'verbose': False,
+        'view': False,
     }
     for k, v in default_opt.items():
         if (not hasattr(args, k)) or (getattr(args, k) is None):
@@ -1150,6 +1156,11 @@ if __name__ == '__main__':
     if args.verbose:
         print("Program arguments:")
         print(args)
+
+    return args
+
+if __name__ == '__main__':
+    args = get_program_options()
 
     img_block_path = args.zarr_dir
     s_swc_path = args.swc_file_path
