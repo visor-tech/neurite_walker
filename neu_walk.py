@@ -1055,7 +1055,7 @@ if __name__ == '__main__':
         description="Walk a neuron tree, generate and show its circular maximum intencity projection(MIP)."
     )
     parser.add_argument('swc_file_path', nargs='*',  # nargs='*' or '+'
-                        default='neuron#122.lyp.swc')
+                        default=['neuron#122.lyp.swc'])  # TODO: at some point, we will need no default
     parser.add_argument('--zarr_dir',
                         default='/mnt/xiaoyy/dataset/zarrblock',
                         help='Path to the zarr directory')
@@ -1087,28 +1087,33 @@ if __name__ == '__main__':
         # Branch depth: 1
         # Node depth: 1254
         # Path length to root: 23228.5
+        if len(s_swc_path) == 0:
+            swc_path = 'neuron#122.lyp.swc'
+            #swc_path = 'neuron#255.lyp.swc'
+            r_c = _a([52785., 28145.6, 55668.9])
+        else:
+            swc_path = s_swc_path[0]
+        print(f'Testing on SWC "{swc_path}"')
+
         if args.test == 'slicing':
             plt.ion()
             Test3dImageSlicing()
             plt.show()
         elif args.test == 'tangent':
             #IPython %run ./neu_walk.py 'neuron#255.lyp.swc' --test tangent
-            swc_path = s_swc_path[0]
             node_idx = 1936
             plt.ion()
             WalkTreeTangent(swc_path, img_block_path, node_idx)
             plt.show()
         elif args.test == 'neu3dviewer':
-            #swc_path = 'neuron#255.lyp.swc'
-            swc_path = s_swc_path[0]
             ntree = LoadSWCTree(swc_path)
-            r_c = _a([52785., 28145.6, 55668.9])
             ViewByNeu3DViewer({'abc': ntree}, img_block_path, r_c)
         elif args.test == 'ntreeops':
             test_ntreeops()
         elif args.test == 'tree_filter':
-            swc_path = s_swc_path[0]
             test_tree_filter(swc_path)
+        else:
+            raise ValueError('Unknown test mode.')
     elif args.view:
         for swc_path in s_swc_path:
             cmip_viewer = TreeCircularMIPViewer(swc_path, img_block_path, args.cmip_dir)
