@@ -862,15 +862,12 @@ class TreeCircularMIPViewer:
     
     def cmip_pos_to_coordinate(self, cmip_pos):
         # get position in terms of process id (id_proc) and path distance to starting point (local_pos)
-        print(self.row_idxs)
-        print(cmip_pos)
         idx_proc = np.searchsorted(self.row_idxs, cmip_pos, 'right') - 1
-        print(idx_proc)
         id_proc = self.proc_ids[idx_proc]
-        local_pos = cmip_pos - self.row_idxs[id_proc]
-        if local_pos > self.proc_img_s[id_proc].shape[0]:
+        local_pos = cmip_pos - self.row_idxs[idx_proc]
+        if local_pos > self.proc_img_s[idx_proc].shape[0]:
             print('Warning: Clicked in the gap.')
-            local_pos = self.proc_img_s[id_proc].shape[0] - 1
+            local_pos = self.proc_img_s[idx_proc].shape[0] - 1
         local_pos = local_pos * self.cmip_res
         # construct the process curve, must be the same as in WalkProcessCircularMIP()
         proc_coor = self.ntree[1][self.processes[id_proc],:3]
