@@ -64,6 +64,7 @@ from neu3dviewer.data_loader import (
     SimplifyTreeWithDepth,
     OnDemandVolumeLoader
 )
+from neu3dviewer.utils import ArrayfyList
 
 # utility functions
 _a  = lambda x: np.array(x, dtype=np.float64)
@@ -1109,7 +1110,13 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
     fn2 = lambda gui: gui.interactor.style.ui_action. \
                         auto_brightness('')
     def fn3(gui):
-        gui: gui.scene_objects['swc.2'].color = 'blue'
+        #gui.scene_objects['swc.2'].color = 'blue'
+        swc_obj_dict = gui.GetObjectsByType('swc')
+        swcs = ArrayfyList(list(swc_obj_dict.values()))
+        swcs['smoothed'].color = 'blue'
+        #gui.render_window.Render()
+        gui.LazyRender()
+
     gui.Start([fn1, fn2, fn3])
 
 def get_program_options():
