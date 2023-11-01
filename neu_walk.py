@@ -23,7 +23,6 @@
 #%autoreload 2
 
 # TODO:
-# * Use um unit in Viewer and axis labels
 # * Add context menu to plot, allow choose error type, and more natural interaction
 #   See https://matplotlib.org/stable/gallery/widgets/menu.html
 # * Show smoothed curve in 3D view
@@ -748,7 +747,7 @@ class FileLogger:
     Format:
     [
         {
-            'clicked_pos': cmip_pos,
+            'clicked_pos_um': cmip_pos,
             'id_proc': id_proc,
             'cmip_local_pos': local_pos,
             'interpolated_pos': r,
@@ -771,8 +770,8 @@ class FileLogger:
     def __len__(self):
         return len(self.logs)
     
-    def clicked_pos(self):
-        return [log['clicked_pos'] for log in self.logs]
+    def clicked_pos_um(self):
+        return [log['clicked_pos_um'] for log in self.logs]
     
     def Append(self, item):
         self.logs.append(item)
@@ -842,11 +841,11 @@ class TreeCircularMIPViewer:
         #print(self.proc_ids)
 
         if len(self.processes) != len(self.tif_pathes):
-            print('__________________________________________________________')
+            print('==========================================================')
             print('Warning: number of processes != number of cMIP')
             print('Indicating cMIPs are not complete or not the same version.')
-            print('Proceed anyway.')
-            print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+            print('The recorded click could be wrong. Proceed anyway.')
+            print('----------------------------------------------------------')
         print(f'Filtering according to "{filter_str}" ...', end='')
         vec_filted = exec_filter_string(filter_str, self.ntrop)
         n_proc = len(self.tif_pathes)
@@ -879,6 +878,8 @@ class TreeCircularMIPViewer:
     def cmip_pos_to_coordinate(self, cmip_pos):
         # get position in terms of process id (id_proc) and path distance to starting point (local_pos)
         idx_proc = np.searchsorted(self.row_idxs, cmip_pos, 'right') - 1
+        if idx_proc == len(self.proc_ids):
+            idx_proc = len(self.proc_ids) - 1
         id_proc = self.proc_ids[idx_proc]
         local_pos = cmip_pos - self.row_idxs[idx_proc]
         if local_pos > self.proc_img_s[idx_proc].shape[0]:
@@ -919,11 +920,14 @@ class TreeCircularMIPViewer:
         return nt
     
     def ConstructCMIP(self, pos0, screen_size = 1000):
+        # pos0 is in pixel unit
         proc_img_s = self.proc_img_s
         row_idxs = self.row_idxs
         gap_size = self.gap_size
         img_height = self.img_height
+        res = self.cmip_res
         n_screen_rows = 4
+        row_size = screen_size/n_screen_rows
 
         screen_img = np.zeros((screen_size, img_height), dtype=np.uint16)
         id_img = np.searchsorted(row_idxs, pos0, 'right') - 1
@@ -943,13 +947,9 @@ class TreeCircularMIPViewer:
             id_img += 1
             i_bg = 0
 
-        clicked_pos = _a(self.logger.clicked_pos())
+        clicked_pos = _a(self.logger.clicked_pos_um()) / res
         b_click_in_local = (clicked_pos > pos0) & (clicked_pos < pos0 + screen_size)
-        local_clicked_pos = clicked_pos[b_click_in_local] - pos0
-
-        #print(clicked_pos)
-        #print(local_clicked_pos)
-        #print(len(self.logger))
+        local_clicked_pos = clicked_pos[b_click_in_local]
 
         figure(301).clear()
         fig, axs = plt.subplots(n_screen_rows, num=301)
@@ -961,12 +961,13 @@ class TreeCircularMIPViewer:
                     self.screen_img_gamma),
                 cmap='gray', origin='lower', **kwval)
         for id_s in range(n_screen_rows):
-            axshow(axs, id_s, n_screen_rows, screen_img)
-            step = screen_size/n_screen_rows
-            ck_idx = (step*id_s <= local_clicked_pos) & (local_clicked_pos < step*(id_s+1))
-            ck_pos = local_clicked_pos[ck_idx] - step*id_s
-            #print(ck_pos)
-            axs[id_s].plot(ck_pos, img_height/2 * np.ones(len(ck_pos)), 'r+')
+            extent = [pos0 + id_s*row_size, pos0 + (id_s+1)*row_size, 0, img_height]
+            extent = res * _a(extent)
+            axshow(axs, id_s, n_screen_rows, screen_img, extent=extent)
+            ck_idx = (pos0 + row_size*id_s <= local_clicked_pos) & \
+                     (local_clicked_pos < pos0 + row_size*(id_s+1))
+            ck_pos = local_clicked_pos[ck_idx]
+            axs[id_s].plot(res*ck_pos, res*img_height/2 * np.ones(len(ck_pos)), 'r+')
         fig.canvas.mpl_connect('key_press_event', self.on_cmip_key)
         fig.canvas.mpl_connect('button_press_event', self.on_cmip_mouse)
 
@@ -1021,15 +1022,17 @@ class TreeCircularMIPViewer:
     def on_cmip_mouse(self, event):
         if (event.button == 1 or event.button == 3) and event.inaxes:
             print('=== Clicked ===')
-            id_ax = list(self.axs).index(event.inaxes)
-            cmip_pos = self.last_pos0 + id_ax * self.screen_size / self.n_screen_row + event.xdata
+            cmip_pos = event.xdata / self.cmip_res
             #print(f' pos: {event.xdata}, {event.ydata}; screen pos {event.x}, {event.y}')
             #print(' ax id', id_ax)
             print(f'cmip_pos: {cmip_pos:.1f} pixel')
             info = self.cmip_pos_to_coordinate(cmip_pos)
             if event.button == 3:
                 t_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-                self.logger.Append({'clicked_pos':cmip_pos, 't_str':t_str} | info)
+                self.logger.Append({
+                        'clicked_pos_um':cmip_pos * self.cmip_res,
+                        't_str':t_str
+                    } | info)
                 self.ConstructCMIP(self.last_pos0)
                 self.fig.canvas.draw()
                 print(f'(recorded, total {len(self.logger)})')
