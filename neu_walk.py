@@ -71,8 +71,16 @@ _a  = lambda x: np.array(x, dtype=np.float64)
 _ai = lambda x: np.array(x, dtype=int)
 _va = lambda *a: np.vstack(a)
 _ha = lambda *a: np.hstack(a)   # concatenate along horizontal axis
-f_l_gamma = lambda a, g: np.uint16(((np.float64(a) - a.min()) / (a.max()-a.min())) **(1/g) * (a.max()-a.min()) + a.min())
 imgshow = lambda im, **kwval: plt.imshow(f_l_gamma(im, 3.0), cmap='gray', origin='lower', **kwval)
+
+def f_l_gamma(a, g):
+    if len(a) == 0:
+        return a
+    min = a.min()
+    max = a.max()
+    if max == min:
+        return a
+    return np.uint16(((np.float64(a) - min) / (max-min)) **(1/g) * (max-min) + min)
 
 def _idx_blk(p, b):
     q = p + b   # if p is np.array, b can be a number or an array
@@ -854,7 +862,10 @@ class TreeCircularMIPViewer:
         self.proc_img_s = [tifffile.imread(s).T for s in self.tif_pathes]
         self.row_idxs = np.cumsum(_ha(0, _ai(
             [i.shape[0] + self.gap_size for i in self.proc_img_s])))
-        self.img_height = self.proc_img_s[0].shape[1]
+        if not self.proc_img_s:
+            self.img_height = 1
+        else:
+            self.img_height = self.proc_img_s[0].shape[1]
         print('done.', '\nNumber of loaded images:', len(self.proc_img_s))
 
         # default "brightness"

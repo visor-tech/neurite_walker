@@ -3,6 +3,6 @@
   "res": 1.0,
   "cmip_dir": "/home/xyy/dataset/RM009/cmip_swc172_res1",
   "swc_file_path": ["/home/xyy/dataset/RM009/swc1.7.2_largest/neuron#220.lyp.swc"],
-  "filter": "",
+  "filter": "(branch_depth(processes)<=3) & (path_length_to_root(end_point(processes))>10000)",
   "view": true
 }
