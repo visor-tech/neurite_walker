@@ -23,10 +23,10 @@
 #%autoreload 2
 
 # TODO:
+# * Use um unit in Viewer and axis labels
 # * Add context menu to plot, allow choose error type, and more natural interaction
 #   See https://matplotlib.org/stable/gallery/widgets/menu.html
 # * Show smoothed curve in 3D view
-# * Use um unit in Viewer and axis labels
 
 import os
 import sys
@@ -1092,7 +1092,7 @@ if __name__ == '__main__':
     )
     parser.add_argument('swc_file_path', nargs='*',  # nargs='*' or '+'
                         default=['neuron#122.lyp.swc'])  # TODO: at some point, we will need no default
-    parser.add_argument('--zarr_dir', required=True,
+    parser.add_argument('--zarr_dir',
                         help='Path to the zarr directory')
     parser.add_argument('--cmip_dir',
                         default="pic_tmp/",
@@ -1100,7 +1100,7 @@ if __name__ == '__main__':
     parser.add_argument('--view', action='store_true',
                         default=False,
                         help='Enable view mode')
-    parser.add_argument('--res', type=float, required=True,
+    parser.add_argument('--res', type=float,
                         help='resolution')
     parser.add_argument('--filter',
                         default=None,
@@ -1110,10 +1110,27 @@ if __name__ == '__main__':
                         """)
     parser.add_argument('--test',
                         help='Test mode, not for general use')
+    parser.add_argument('--config_path',
+                        help='Path to the configuration file in json format.'
+                        'supply the same arguments as commandline options.'
+                        'Commandline options have higher priority.')
     parser.add_argument('--verbose', action='store_true',
                         default=False,
                         help='Show more information')
     args = parser.parse_args()
+    
+    if args.verbose:
+        print('From command-line.')
+        print(args)
+
+    # read config from file, if any
+    if args.config_path:
+        # read from config if not presented in commandline.
+        opt = json.load(open(args.config_path, 'r', encoding='utf-8'))
+        for k, v in opt.items():
+            if (k in args) and (getattr(args, k) is None):
+                vars(args)[k] = v
+
     if args.verbose:
         print("Program arguments:")
         print(args)
