@@ -1090,20 +1090,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Walk a neuron tree, generate and show its circular maximum intencity projection(MIP)."
     )
-    parser.add_argument('swc_file_path', nargs='*',  # nargs='*' or '+'
-                        default=['neuron#122.lyp.swc'])  # TODO: at some point, we will need no default
+    parser.add_argument('swc_file_path', nargs='*')  # nargs='*' or '+'
     parser.add_argument('--zarr_dir',
                         help='Path to the zarr directory')
     parser.add_argument('--cmip_dir',
-                        default="pic_tmp/",
                         help='Path to the circular MIP directory, for write or read (view mode)')
     parser.add_argument('--view', action='store_true',
-                        default=False,
+                        default=argparse.SUPPRESS,  # for later filled by config
                         help='Enable view mode')
     parser.add_argument('--res', type=float,
                         help='resolution')
     parser.add_argument('--filter',
-                        default=None,
                         help="""
                         string for filtering the processes.
                         Example: '(branch_depth(processes)<=3) & (path_length_to_root(end_point(processes))>10000)' 
@@ -1115,11 +1112,11 @@ if __name__ == '__main__':
                         'supply the same arguments as commandline options.'
                         'Commandline options have higher priority.')
     parser.add_argument('--verbose', action='store_true',
-                        default=False,
+                        default=argparse.SUPPRESS,  # for later filled by config
                         help='Show more information')
     args = parser.parse_args()
     
-    if args.verbose:
+    if getattr(args, 'verbose', False):
         print('From command-line.')
         print(args)
 
@@ -1130,6 +1127,25 @@ if __name__ == '__main__':
         for k, v in opt.items():
             if (k in args) and (getattr(args, k) is None):
                 vars(args)[k] = v
+        # special rule for swc path
+        if (args.swc_file_path == []) and ('swc_file_path' in opt):
+            args.swc_file_path = opt['swc_file_path']
+        # special rule for view
+        k_switches = ['view', 'verbose']
+        for k in k_switches:
+            if (not hasattr(args, k)) and (k in opt):
+                vars(args)[k] = opt[k]
+
+    # set default values
+    default_opt = {
+        'verbose': False,
+    }
+    for k, v in default_opt.items():
+        if (not hasattr(args, k)) or (getattr(args, k) is None):
+            vars(args)[k] = v
+
+    if args.view is None:
+        raise ValueError('Unknown view mode. Specify --view true or --view false')
 
     if args.verbose:
         print("Program arguments:")
