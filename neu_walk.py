@@ -28,6 +28,8 @@
 #   - or try fig.add_axes([0.7, 0.05, 0.1, 0.075]) to add a button
 #   - https://matplotlib.org/stable/gallery/widgets/buttons.html
 #   See https://matplotlib.org/stable/gallery/widgets/menu.html
+# * Try multi-threading call to neu3dviewer, each with its own gui_ctrl.
+# * Try update gui_ctrl in a seperate thread, faster response. q to minimize.
 # * test interpolator for sitk.Resample: sitkLanczosWindowedSinc, sitkGaussian
 # * Try Range slider: https://matplotlib.org/stable/gallery/widgets/range_slider.html
 
@@ -1048,7 +1050,6 @@ class TreeCircularMIPViewer:
         Right key: record
         Middle key: show info in cmd
         """
-        print(event)
         if not ((event.button == 1 or event.button == 2 or event.button == 3) and event.inaxes):
             return
         print('=== Clicked ===')
