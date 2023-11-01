@@ -25,7 +25,7 @@
 # TODO:
 # * Add context menu to plot, allow choose error type, and more natural interaction
 #   See https://matplotlib.org/stable/gallery/widgets/menu.html
-# * Show smoothed curve in 3D view
+# * test interpolator for sitk.Resample: sitkLanczosWindowedSinc, sitkGaussian
 
 import os
 import sys
@@ -811,10 +811,12 @@ def WalkTreeCircularMIP(swc_path, image_block_path, cmip_dir, resolution):
         tifffile.imwrite(img_out_name, axon_circular_mip.T)
 
 class TreeCircularMIPViewer:
-    def __init__(self, swc_path, image_block_path, pic_path, res, filter_str = None):
+    def __init__(self, swc_path, image_block_path, pic_path, res, view_len_str, filter_str = None):
         self.swc_path = swc_path
         self.image_block_path = image_block_path
         self.pic_path = pic_path
+        self.view_length = int(view_len_str.split('/')[0])   # 1000
+        self.view_n_rows = int(view_len_str.split('/')[1])   # 4
         # extract neuron id, e.g. 255 in 'neuron#255.lyp.swc'
         self.neu_id = int(os.path.basename(swc_path).split('neuron#')[1].split('.')[0])
         print(f'neuron id: {self.neu_id}')
@@ -919,14 +921,15 @@ class TreeCircularMIPViewer:
             )
         return nt
     
-    def ConstructCMIP(self, pos0, screen_size = 1000):
+    def ConstructCMIP(self, pos0):
         # pos0 is in pixel unit
+        screen_size = self.view_length
+        n_screen_rows = self.view_n_rows
         proc_img_s = self.proc_img_s
         row_idxs = self.row_idxs
         gap_size = self.gap_size
         img_height = self.img_height
         res = self.cmip_res
-        n_screen_rows = 4
         row_size = screen_size/n_screen_rows
 
         screen_img = np.zeros((screen_size, img_height), dtype=np.uint16)
@@ -961,13 +964,17 @@ class TreeCircularMIPViewer:
                     self.screen_img_gamma),
                 cmap='gray', origin='lower', **kwval)
         for id_s in range(n_screen_rows):
-            extent = [pos0 + id_s*row_size, pos0 + (id_s+1)*row_size, 0, img_height]
+            extent = [pos0 + id_s*row_size, pos0 + (id_s+1)*row_size,
+                      0, img_height]
             extent = res * _a(extent)
             axshow(axs, id_s, n_screen_rows, screen_img, extent=extent)
             ck_idx = (pos0 + row_size*id_s <= local_clicked_pos) & \
                      (local_clicked_pos < pos0 + row_size*(id_s+1))
             ck_pos = local_clicked_pos[ck_idx]
             axs[id_s].plot(res*ck_pos, res*img_height/2 * np.ones(len(ck_pos)), 'r+')
+            if id_s == n_screen_rows - 1:
+                axs[id_s].set_xlabel('um')
+                axs[id_s].set_ylabel('um')
         fig.canvas.mpl_connect('key_press_event', self.on_cmip_key)
         fig.canvas.mpl_connect('button_press_event', self.on_cmip_mouse)
 
@@ -1119,6 +1126,8 @@ def get_program_options():
                         help='Enable view mode')
     parser.add_argument('--res', type=float,
                         help='resolution')
+    parser.add_argument('--view_length',
+                        help='view length in screen, total length / rows, default "1000/4".')
     parser.add_argument('--filter',
                         help="""
                         string for filtering the processes.
@@ -1159,6 +1168,7 @@ def get_program_options():
     default_opt = {
         'verbose': False,
         'view': False,
+        'view_length': "1000/4",
     }
     for k, v in default_opt.items():
         if (not hasattr(args, k)) or (getattr(args, k) is None):
@@ -1217,7 +1227,7 @@ if __name__ == '__main__':
         for swc_path in s_swc_path:
             cmip_viewer = TreeCircularMIPViewer(
                 swc_path, img_block_path, args.cmip_dir,
-                args.res, args.filter)
+                args.res, args.view_length, args.filter)
             cmip_viewer.ConstructCMIP(0)
             plt.show()
     else:
