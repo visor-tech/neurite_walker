@@ -703,6 +703,20 @@ def test_ntreeops():
     # test end_point
     assert(np.all(ntrop.end_point([pc1, pc2]) == [2, 13]))
 
+def exec_filter_string(filter_str, ntrop):
+    local_vars = {
+        'processes': ntrop.processes,
+        'branch_depth': ntrop.branch_depth,
+        'path_length_to_root': ntrop.path_length_to_root,
+        'end_point': ntrop.end_point,
+        # additional
+        'ntrop': ntrop,
+        'swc_path': swc_path,
+        'np' : np,
+    }
+    vec_filted = eval(filter_str, {}, local_vars)
+    return vec_filted
+
 def test_tree_filter(swc_path):
     ntrop = NTreeOps(swc_path)
     #print(len(ntrop.processes))
@@ -710,8 +724,14 @@ def test_tree_filter(swc_path):
     #print(dep)
     dep_ref = SimplifyTreeWithDepth(ntrop.processes)[:,2]
     assert(np.all(dep == dep_ref[1:]))
-    print((dep <= 3) &
-          (ntrop.path_length_to_root(ntrop.end_point(ntrop.processes)) > 1000))
+    vec_filted_ref = (dep <= 3) & \
+                     (ntrop.path_length_to_root(ntrop.end_point(ntrop.processes)) > 10000)
+    #print(vec_filted_ref)
+    filter_str = '(branch_depth(processes)<=3) & (path_length_to_root(end_point(processes))>10000)'
+    vec_filted = exec_filter_string(filter_str, ntrop)
+    #print(vec_filted)
+    #print(np.array2string(_ha(vec_filted[:,None], vec_filted_ref[:,None]), threshold=3000))
+    assert(np.all(vec_filted == vec_filted_ref))
 
 class FileLogger:
     """
