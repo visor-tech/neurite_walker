@@ -704,6 +704,8 @@ def test_ntreeops():
     assert(np.all(ntrop.end_point([pc1, pc2]) == [2, 13]))
 
 def exec_filter_string(filter_str, ntrop):
+    if (filter_str is None) or (filter_str == ''):
+        return np.ones(len(ntrop.processes), dtype=bool)
     local_vars = {
         'processes': ntrop.processes,
         'branch_depth': ntrop.branch_depth,
@@ -802,13 +804,20 @@ def WalkTreeCircularMIP(swc_path, image_block_path, cmip_dir, resolution):
         tifffile.imwrite(img_out_name, axon_circular_mip.T)
 
 class TreeCircularMIPViewer:
-    def __init__(self, swc_path, image_block_path, pic_path, res = 2.0):
+    def __init__(self, swc_path, image_block_path, pic_path, res, filter_str = None):
         self.swc_path = swc_path
         self.image_block_path = image_block_path
         self.pic_path = pic_path
         # extract neuron id, e.g. 255 in 'neuron#255.lyp.swc'
         self.neu_id = int(os.path.basename(swc_path).split('neuron#')[1].split('.')[0])
         print(f'neuron id: {self.neu_id}')
+
+        print('Loading swc...', end='')
+        #self.ntree, self.processes = LoadSWCTreeProcess(self.swc_path)
+        self.ntrop = NTreeOps(self.swc_path)
+        self.ntree = self.ntrop.ntree
+        self.processes = self.ntrop.processes
+        print('done.\nNumber of processes:', len(self.processes))
 
         # list and sort pic path
         self.tif_pathes = glob.glob(os.path.join(
@@ -823,21 +832,28 @@ class TreeCircularMIPViewer:
             raise ValueError(f'No cMIP image found. Search path is "{self.pic_path}".')
         #print('\n'.join(self.tif_pathes))
         #print(self.proc_ids)
+
+        print(f'Filtering according to "{filter_str}" ...', end='')
+        assert(len(self.processes) == len(self.tif_pathes))
+        vec_filted = exec_filter_string(filter_str, self.ntrop)
+        n_proc = len(self.processes)
+        self.tif_pathes = [self.tif_pathes[i] for i in range(n_proc) if vec_filted[self.proc_ids[i]]]
+        self.proc_ids   = [self.proc_ids[i]   for i in range(n_proc) if vec_filted[self.proc_ids[i]]]
+        print(f'done. {len(self.tif_pathes)} processes left.')
+
         self.cmip_res = res
         self.gap_size = 3
 
         # load images and construct index (lookup table)
+        print('Loading Circular MIP images...', end='')
         self.proc_img_s = [tifffile.imread(s).T for s in self.tif_pathes]
         self.row_idxs = np.cumsum(_ha(0, _ai(
             [i.shape[0] + self.gap_size for i in self.proc_img_s])))
         self.img_height = self.proc_img_s[0].shape[1]
+        print('done.', '\nNumber of loaded images:', len(self.proc_img_s))
 
         # default "brightness"
         self.screen_img_gamma = 3.0
-
-        print('Loading swc...', end='')
-        self.ntree, self.processes = LoadSWCTreeProcess(self.swc_path)
-        print('done.')
 
         #t_now_str = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         #f_pos_path = f'neuron#{self.neu_id}_cmip_marks_{t_now_str}.json'
@@ -846,7 +862,10 @@ class TreeCircularMIPViewer:
     
     def cmip_pos_to_coordinate(self, cmip_pos):
         # get position in terms of process id (id_proc) and path distance to starting point (local_pos)
+        print(self.row_idxs)
+        print(cmip_pos)
         idx_proc = np.searchsorted(self.row_idxs, cmip_pos, 'right') - 1
+        print(idx_proc)
         id_proc = self.proc_ids[idx_proc]
         local_pos = cmip_pos - self.row_idxs[id_proc]
         if local_pos > self.proc_img_s[id_proc].shape[0]:
@@ -1076,8 +1095,7 @@ if __name__ == '__main__':
     )
     parser.add_argument('swc_file_path', nargs='*',  # nargs='*' or '+'
                         default=['neuron#122.lyp.swc'])  # TODO: at some point, we will need no default
-    parser.add_argument('--zarr_dir',
-                        default='/mnt/xiaoyy/dataset/zarrblock',
+    parser.add_argument('--zarr_dir', required=True,
                         help='Path to the zarr directory')
     parser.add_argument('--cmip_dir',
                         default="pic_tmp/",
@@ -1085,8 +1103,14 @@ if __name__ == '__main__':
     parser.add_argument('--view', action='store_true',
                         default=False,
                         help='Enable view mode')
-    parser.add_argument('--res', type=float,
+    parser.add_argument('--res', type=float, required=True,
                         help='resolution')
+    parser.add_argument('--filter',
+                        default=None,
+                        help="""
+                        string for filtering the processes.
+                        Example: '(branch_depth(processes)<=3) & (path_length_to_root(end_point(processes))>10000)' 
+                        """)
     parser.add_argument('--test',
                         help='Test mode, not for general use')
     parser.add_argument('--verbose', action='store_true',
@@ -1136,7 +1160,9 @@ if __name__ == '__main__':
             raise ValueError('Unknown test mode.')
     elif args.view:
         for swc_path in s_swc_path:
-            cmip_viewer = TreeCircularMIPViewer(swc_path, img_block_path, args.cmip_dir)
+            cmip_viewer = TreeCircularMIPViewer(
+                swc_path, img_block_path, args.cmip_dir,
+                args.res, args.filter)
             cmip_viewer.ConstructCMIP(0)
             plt.show()
     else:
