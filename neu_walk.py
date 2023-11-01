@@ -24,8 +24,12 @@
 
 # TODO:
 # * Add context menu to plot, allow choose error type, and more natural interaction
+#   - https://matplotlib.org/stable/gallery/widgets/menu.html
+#   - or try fig.add_axes([0.7, 0.05, 0.1, 0.075]) to add a button
+#   - https://matplotlib.org/stable/gallery/widgets/buttons.html
 #   See https://matplotlib.org/stable/gallery/widgets/menu.html
 # * test interpolator for sitk.Resample: sitkLanczosWindowedSinc, sitkGaussian
+# * Try Range slider: https://matplotlib.org/stable/gallery/widgets/range_slider.html
 
 import os
 import sys
@@ -978,6 +982,7 @@ class TreeCircularMIPViewer:
                 axs[id_s].set_ylabel('um')
         fig.canvas.mpl_connect('key_press_event', self.on_cmip_key)
         fig.canvas.mpl_connect('button_press_event', self.on_cmip_mouse)
+        fig.canvas.mpl_connect('scroll_event', self.on_cmip_scroll)
 
         # bad design
         self.fig = fig
@@ -1027,34 +1032,52 @@ class TreeCircularMIPViewer:
                 self.fig.canvas.draw()
                 print(f'(revoked, total {len(self.logger)})')
 
+    def on_cmip_scroll(self, event):
+        #print(event.button, event.step)
+        step = int(self.screen_size / self.n_screen_row)
+        if event.button == 'up':
+            if self.last_pos0 > step/2:
+                self.ConstructCMIP(self.last_pos0 - step)
+        else:
+            self.ConstructCMIP(self.last_pos0 + step)
+        self.fig.canvas.draw()
+
     def on_cmip_mouse(self, event):
-        if (event.button == 1 or event.button == 3) and event.inaxes:
-            print('=== Clicked ===')
-            cmip_pos = event.xdata / self.cmip_res
-            #print(f' pos: {event.xdata}, {event.ydata}; screen pos {event.x}, {event.y}')
-            #print(' ax id', id_ax)
-            print(f'cmip_pos: {cmip_pos:.1f} pixel')
-            info = self.cmip_pos_to_coordinate(cmip_pos)
-            if event.button == 3:
-                t_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
-                self.logger.Append({
-                        'clicked_pos_um':cmip_pos * self.cmip_res,
-                        't_str':t_str
-                    } | info)
-                self.ConstructCMIP(self.last_pos0)
-                self.fig.canvas.draw()
-                print(f'(recorded, total {len(self.logger)})')
-            if event.key == 'v':
-                self.fig.canvas.flush_events()
-                print('Opening Neu3DViewer...')
-                nt = {
-                    f'neuron#{self.neu_id}':self.ntree,
-                    'smoothed': self.LocalCurveToNTree(
-                        info['id_proc'],
-                        info['cmip_local_pos'],
-                        self.cmip_res * self.img_height * 0.6),
-                }
-                ViewByNeu3DViewer(nt, self.image_block_path, info['interpolated_pos'])
+        """
+        Left key: view in  3D
+        Right key: record
+        Middle key: show info in cmd
+        """
+        print(event)
+        if not ((event.button == 1 or event.button == 2 or event.button == 3) and event.inaxes):
+            return
+        print('=== Clicked ===')
+        cmip_pos = event.xdata / self.cmip_res
+        #print(f' pos: {event.xdata}, {event.ydata}; screen pos {event.x}, {event.y}')
+        #print(' ax id', id_ax)
+        print(f'cmip_pos: {cmip_pos:.1f} pixel')
+        info = self.cmip_pos_to_coordinate(cmip_pos)
+        if event.button == 3:
+            # add to log
+            t_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+            self.logger.Append({
+                    'clicked_pos_um':cmip_pos * self.cmip_res,
+                    't_str':t_str
+                } | info)
+            self.ConstructCMIP(self.last_pos0)
+            self.fig.canvas.draw()
+            print(f'(recorded, total {len(self.logger)})')
+        if event.button == 1:          # event.key == 'v':
+            self.fig.canvas.flush_events()
+            print('Opening Neu3DViewer...')
+            nt = {
+                f'neuron#{self.neu_id}':self.ntree,
+                'smoothed': self.LocalCurveToNTree(
+                    info['id_proc'],
+                    info['cmip_local_pos'],
+                    self.cmip_res * self.img_height * 0.6),
+            }
+            ViewByNeu3DViewer(nt, self.image_block_path, info['interpolated_pos'])
 
 def SaveSWC(fout_path, ntree, comments=''):
     with open(fout_path, 'w', encoding="utf-8") as fout:
@@ -1113,7 +1136,8 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
         #gui.scene_objects['swc.2'].color = 'blue'
         swc_obj_dict = gui.GetObjectsByType('swc')
         swcs = ArrayfyList(list(swc_obj_dict.values()))
-        swcs['smoothed'].color = 'blue'
+        if 'smoothed' in swcs.obj_dict:
+            swcs['smoothed'].color = 'blue'
         #gui.render_window.Render()
         gui.LazyRender()
 
@@ -1205,8 +1229,6 @@ if __name__ == '__main__':
         # Path length to root: 23228.5
         if len(s_swc_path) == 0:
             swc_path = 'neuron#122.lyp.swc'
-            #swc_path = 'neuron#255.lyp.swc'
-            r_c = _a([52785., 28145.6, 55668.9])
         else:
             swc_path = s_swc_path[0]
         print(f'Testing on SWC "{swc_path}"')
@@ -1223,6 +1245,9 @@ if __name__ == '__main__':
             plt.show()
         elif args.test == 'neu3dviewer':
             ntree = LoadSWCTree(swc_path)
+            #swc_path = 'neuron#255.lyp.swc'
+            #r_c = _a([52785., 28145.6, 55668.9])
+            r_c = _a([46090.5, 35027.2, 37534.6])
             ViewByNeu3DViewer({'abc': ntree}, img_block_path, r_c)
         elif args.test == 'ntreeops':
             test_ntreeops()
