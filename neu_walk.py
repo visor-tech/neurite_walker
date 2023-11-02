@@ -4,7 +4,7 @@
 # * Prepare a directory named "pic_tmp" to hold output cMIP images
 # * Put external dependencies in directory "external", such as external/neu3dviewer
 # * See requirements.txt for required python packages.
-# * need python3.11
+# * need python3.11 or higher
 
 ## Usage:
 # To generate cMIP for a neuron, run the following command:
@@ -1150,14 +1150,14 @@ def get_program_options():
     )
     parser.add_argument('swc_file_path', nargs='*')  # nargs='*' or '+'
     parser.add_argument('--zarr_dir',
-                        help='Path to the zarr directory')
+                        help='Path to the zarr directory.')
     parser.add_argument('--cmip_dir',
-                        help='Path to the circular MIP directory, for write or read (view mode)')
+                        help='Path to the circular MIP directory, for write or read (view mode).')
     parser.add_argument('--view', action='store_true',
                         default=argparse.SUPPRESS,  # for later filled by config
-                        help='Enable view mode')
+                        help='Enable view mode.')
     parser.add_argument('--res', type=float,
-                        help='resolution')
+                        help='resolution, e.g. "1.0".')
     parser.add_argument('--view_length',
                         help='view length in screen, total length / rows, default "1000/4".')
     parser.add_argument('--filter',
@@ -1166,14 +1166,14 @@ def get_program_options():
                         Example: '(branch_depth(processes)<=3) & (path_length_to_root(end_point(processes))>10000)' 
                         """)
     parser.add_argument('--test',
-                        help='Test mode, not for general use')
+                        help='Test mode, not for general use.')
     parser.add_argument('--config_path',
                         help='Path to the configuration file in json format.'
                         'supply the same arguments as commandline options.'
                         'Commandline options have higher priority.')
     parser.add_argument('--verbose', action='store_true',
                         default=argparse.SUPPRESS,  # for later filled by config
-                        help='Show more information')
+                        help='Show more information.')
     args = parser.parse_args()
     
     if getattr(args, 'verbose', False):
@@ -1214,6 +1214,17 @@ def get_program_options():
         print(args)
 
     return args
+
+def check_cmd_options(args, *opt_names):
+    ok = True
+    for opt_name in opt_names:
+        opt = opt_name.lstrip('-')
+        if (not hasattr(args, opt)) or (getattr(args, opt) is None) or \
+            (isinstance(getattr(args, opt), list) and (len(getattr(args, opt)) == 0)):
+            print(f'Option "{opt_name}" is not specified.')
+            ok = False
+    if not ok:
+        raise ValueError(f'Lack of options. See `python {os.path.basename(__file__)} -h` for help.')
 
 if __name__ == '__main__':
     args = get_program_options()
@@ -1257,6 +1268,7 @@ if __name__ == '__main__':
         else:
             raise ValueError('Unknown test mode.')
     elif args.view:
+        check_cmd_options(args, 'swc_file_path', '--cmip_dir', '--zarr_dir', '--res')
         for swc_path in s_swc_path:
             cmip_viewer = TreeCircularMIPViewer(
                 swc_path, img_block_path, args.cmip_dir,
@@ -1264,6 +1276,7 @@ if __name__ == '__main__':
             cmip_viewer.ConstructCMIP(0)
             plt.show()
     else:
+        check_cmd_options(args, 'swc_file_path', '--cmip_dir', '--zarr_dir', '--res')
         for swc_path in s_swc_path:
             WalkTreeCircularMIP(swc_path, img_block_path,
                                 args.cmip_dir, args.res)
