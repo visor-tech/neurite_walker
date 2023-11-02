@@ -56,21 +56,16 @@ from matplotlib.pyplot import xlabel, ylabel, title, figure
 plt.rcParams['keymap.save'] = ['ctrl+s']
 plt.rcParams['keymap.quit'] = ['ctrl+w', 'cmd+w']
 
-# add path of current py file
-pkg_path_neu3dviewer_rel = 'external/neu3dviewer'
-cur_path = os.path.dirname(os.path.abspath(__file__))
-pkg_path_neu3dviewer = os.path.join(cur_path, pkg_path_neu3dviewer_rel)
-sys.path.append(pkg_path_neu3dviewer)
-# add neu3dviewer to the path, we need some helper functions in it
-import neu3dviewer.utils
-from neu3dviewer.img_block_viewer import GUIControl
-from neu3dviewer.data_loader import (
+# we need some helper functions from neu3dviewer
+import external.SimpleVolumeViewer.neu3dviewer as neu3dviewer
+from external.SimpleVolumeViewer.neu3dviewer.img_block_viewer import GUIControl
+from external.SimpleVolumeViewer.neu3dviewer.data_loader import (
     dtype_id, dtype_coor,
     LoadSWCTree, SplitSWCTree, SWCDFSSort, SWCNodeRelabel, GetUndirectedGraph,
     SimplifyTreeWithDepth,
     OnDemandVolumeLoader
 )
-from neu3dviewer.utils import ArrayfyList
+from external.SimpleVolumeViewer.neu3dviewer.utils import ArrayfyList
 
 # utility functions
 _a  = lambda x: np.array(x, dtype=np.float64)
@@ -663,6 +658,7 @@ class NTreeOps:
         return self.node_root_path_length[self.map_id_idx[node_id]]
 
 def test_ntreeops():
+    pkg_path_neu3dviewer = os.path.dirname(os.path.dirname(neu3dviewer.__file__))
     swc_path = os.path.join(pkg_path_neu3dviewer, 'tests/ref_data/swc_ext/t3.3.swc')
     ntrop = NTreeOps(swc_path, True)
     # test reading a tree
