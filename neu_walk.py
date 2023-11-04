@@ -23,13 +23,14 @@
 #%autoreload 2
 
 # TODO:
+# * Try multi-threading call to neu3dviewer, each with its own gui_ctrl.
+#   - cannot done, due to main thread is easily blocked when GUIControl thread started.
+# * Try update gui_ctrl in a seperate thread, faster response. Alt+x to minimize.
 # * Add context menu to plot, allow choose error type, and more natural interaction
 #   - https://matplotlib.org/stable/gallery/widgets/menu.html
 #   - or try fig.add_axes([0.7, 0.05, 0.1, 0.075]) to add a button
 #   - https://matplotlib.org/stable/gallery/widgets/buttons.html
 #   See https://matplotlib.org/stable/gallery/widgets/menu.html
-# * Try multi-threading call to neu3dviewer, each with its own gui_ctrl.
-# * Try update gui_ctrl in a seperate thread, faster response. q to minimize.
 # * test interpolator for sitk.Resample: sitkLanczosWindowedSinc, sitkGaussian
 # * Try Range slider: https://matplotlib.org/stable/gallery/widgets/range_slider.html
 
@@ -1078,7 +1079,7 @@ class TreeCircularMIPViewer:
                 'smoothed': self.LocalCurveToNTree(
                     info['id_proc'],
                     info['cmip_local_pos'],
-                    self.cmip_res * self.img_height * 0.6),
+                    self.cmip_res * 128),
             }
             ViewByNeu3DViewer(nt, self.image_block_path, info['interpolated_pos'])
 
