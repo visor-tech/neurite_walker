@@ -56,16 +56,22 @@ from matplotlib.pyplot import xlabel, ylabel, title, figure
 plt.rcParams['keymap.save'] = ['ctrl+s']
 plt.rcParams['keymap.quit'] = ['ctrl+w', 'cmd+w']
 
+# add a possible directory of external dependencies
+_basedir = os.path.dirname(os.path.abspath(__file__))
+_extdir  = os.path.join(_basedir, 'external', 'SimpleVolumeViewer')
+if os.path.isdir(_extdir):
+    sys.path.insert(0, _extdir)
+
 # we need some helper functions from neu3dviewer
-import external.SimpleVolumeViewer.neu3dviewer as neu3dviewer
-from external.SimpleVolumeViewer.neu3dviewer.img_block_viewer import GUIControl
-from external.SimpleVolumeViewer.neu3dviewer.data_loader import (
+import neu3dviewer
+from neu3dviewer.img_block_viewer import GUIControl
+from neu3dviewer.data_loader import (
     dtype_id, dtype_coor,
     LoadSWCTree, SplitSWCTree, SWCDFSSort, SWCNodeRelabel, GetUndirectedGraph,
     SimplifyTreeWithDepth,
     OnDemandVolumeLoader
 )
-from external.SimpleVolumeViewer.neu3dviewer.utils import ArrayfyList
+from neu3dviewer.utils import ArrayfyList
 
 # utility functions
 _a  = lambda x: np.array(x, dtype=np.float64)
