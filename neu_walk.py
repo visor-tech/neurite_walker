@@ -1096,7 +1096,7 @@ def SaveSWC(fout_path, ntree, comments=''):
             fout.write('%d %d %.1f %.1f %.1f %.3f %d\n' % \
                        (nid, ty, x, y, z, di, pa))
 
-def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
+def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center, gui_3d = None):
     """
     Open Neu3DViewer to view the swc tree and image block.
     named_ntree: named ntree in dict
@@ -1129,9 +1129,6 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
     }
     # call Neu3DViewer
     neu3dviewer.utils.debug_level = 2
-    gui = GUIControl()
-    gui.EasyObjectImporter(cmd_obj_desc)
-    gui.Set3DCursor(r_center)
     fn1 = lambda gui: gui.interactor.style.ui_action. \
                         scene_look_at(r_center, look_distance)
     fn2 = lambda gui: gui.interactor.style.ui_action. \
@@ -1145,7 +1142,17 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center):
         #gui.render_window.Render()
         gui.LazyRender()
 
-    gui.Start([fn1, fn2, fn3])
+    if gui_3d == None:
+        gui = GUIControl()
+        gui.EasyObjectImporter(cmd_obj_desc)
+        gui.Set3DCursor(r_center)
+        gui.Start([fn1, fn2, fn3])
+    else:
+        gui = gui_3d
+        gui.EasyObjectImporter(cmd_obj_desc)
+        gui.Set3DCursor(r_center)
+        for fn in [fn1, fn2, fn3]:
+            fn(gui)
 
 def get_program_options():
     parser = argparse.ArgumentParser(
