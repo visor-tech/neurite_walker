@@ -1,0 +1,1 @@
+.\Programs\python-3.11.6-embed-amd64\python.exe -m neu3dviewer
