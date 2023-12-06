@@ -1,0 +1,99 @@
+Steps to generate a batch of CMIP
+
+
+## prepare SWC files
+
+  * Go to `RM009已有神经元追踪数据归档` and downloads an latest zip file for *.lyp .
+  * Unzip the *.lyp files to a designated directory, say ./2.1.0/.
+  * Convert the *.lyp files to .swc files. Command:
+      mkdir 2.1.0_swc_largest
+      cd ./v2.1.0/
+      python3 ~/code/py/fiber-inspector/lyp_to_swc.py --export_largest_only --output_directory ../2.1.0_swc_largest *.lyp
+      # copy files
+      cp -r 2.1.0_swc_largest /mnt/xiaoyy/dataset/RM009/
+      cd /mnt/xiaoyy/dataset/RM009/
+      mv 2.1.0_swc_largest swc210_largest    # different name convension
+
+
+## Get image blocks around the SWC (neurons)
+
+  * Go to `RM009已有神经元追踪数据归档` and find the path.
+  * Convert the image blocks to zarr format. Command:
+      ssh xiaoyy@mn02
+      conda activate ~/mconda3/envs/py311
+      cd ~/dataset/
+      vi blk2zarr.py        # verify the path
+      python blk2zarr.py
+      # wait a long time, e.g. 9 hours.
+
+
+## prepare source code in the cluster.
+
+  * use gitlab. Command:
+      # continue on the conda env
+      cd ~/code/
+      git clone https://jihulab.com/eddyxiao/neurite_walker.git
+      git clone https://github.com/bewantbe/SimpleVolumeViewer.git
+
+  * or, update the repo
+      cd ~/code/neurite_walker
+      git pull
+      cd ~/code/SimpleVolumeViewer
+      git pull
+      # resolve conflicts, if any.
+
+  * make sure the conda environment meet the requirements.txt
+      conda install --file neurite_walker/requirements.txt
+      conda install --file SimpleVolumeViewer/requirements.txt
+
+
+## Generate CMIP in parallel
+
+  * Prepare slurm script
+     # copy to a running directory
+     cp ~/code/neurite_walker/run_script/run_arr1.sh ~/run/
+     cd  ~/run/
+     vi run_arr1.sh     # adapt to our needs, most notably, change the path to SWC , zarr and output cmip
+  
+neu172_sps231010
+
+  * run the job
+     mkdir ~/dataset/RM009/cmip_swc210_res1
+     cd  ~/run/
+     # test:
+     sbatch --array=1-2:1%2 run_arr1.sh
+
+  * Watch
+     squeue                            # note down the job ID
+     ls -lthr --time-style=long-iso    # note down the job ID
+     ls -l ~/dataset/RM009/cmip_swc210_res1
+
+  * When error or confirm OK, stop it
+     scancel 19813
+
+  * Refine and full run
+     # clean the desitinate cmip directory
+     cd ~/dataset/RM009/cmip_swc210_res1
+     rm *.tif
+     ls
+     cd ~/run/
+     # find how many swcs there
+     find ~/dataset/RM009/swc210_largest -type f | wc -l
+     sbatch -w c001 --array=1-639:1%72 run_arr1.sh
+
+  * Watch and wait, say 2 days.
+
+## Use the CMIP
+
+  * copy back to a portable device
+
+    scp -r xiaoyy@mn02:/mnt/xiaoyy/dataset/RM009/cmip_swc210_res1 ./dataset/RM009/cmip_swc210_res1
+
+
+  * See the CMIP !
+
+    cd ~/code/py/neurite_walker
+    source /media/xyy/DATA/pyenvs/visor/bin/activate
+    ./neu_walk.py --cmip_dir /mnt/xiaoyy/dataset/RM009/cmip_swc210_res1 --res 1 --zarr_dir /mnt/xiaoyy/dataset/RM009/blk128_neu172_sps231010.zarr --filter '(branch_depth(processes)<=3) & (path_length_to_root(end_point(processes))>10000)' /mnt/xiaoyy/dataset/RM009/swc210_largest/neuron#214.lyp.swc --view
+
+
