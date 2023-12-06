@@ -1,28 +1,61 @@
-Modify: ._pth
-uncomment import site
+
+## General info
+
 ref.
+The embeddable package
 https://docs.python.org/3/using/windows.html#the-embeddable-package
+
+Path searching logic
+https://docs.python.org/3/using/windows.html#finding-modules
+and (isolated mode)
 https://docs.python.org/3/library/sys_path_init.html#sys-path-init
 https://docs.python.org/3/library/site.html#module-site
 https://docs.python.org/3/installing/index.html
-import path search
-https://docs.python.org/3/reference/import.html
 
-cd F:\Programs\python-3.11.6-embed-amd64
-wget https://bootstrap.pypa.io/get-pip.py
+# import path search
+https://docs.python.org/3/reference/import.html
+ 
+
+##1. Download Windows embeddable package (64-bit)
+
+  e.g. from https://www.python.org/downloads/windows/
+  https://www.python.org/ftp/python/3.11.7/python-3.11.7-embed-amd64.zip
+
+  Unzip it to a directory, say ./py311/
+
+  Try run it: ./python.exe
+  Exit by import os; os._exit(0)
+
+
+##2. Enable customizable packages
+
+Modify: python311._pth
+uncomment import site
+
+
+##3. install pip
+#cd F:\Programs\python-3.11.6-embed-amd64
+cd py311
+wget https://bootstrap.pypa.io/get-pip.py -O get-pip.py
 #ref. https://github.com/pypa/get-pip
 
 # install pip
 ./python.exe get-pip.py
 
-# isntall dependences
+##4. isntall dependences
 ./python.exe -m pip install -r '..\..\code\neurite_walker\requirements.txt'
 ./python.exe -m pip install -r '..\..\code\SimpleVolumeViewer\requirements.txt'
+#./python.exe -m pip install -r 'C:\Users\xyy82\code\py\neurite_walker\requirements.txt'
 
 ref: 
 https://blog.ohidur.com/posts/python/articles/setting-up-python-embeddable-distribution/
 
-# test
+## insert customized
+
+Add customized import path to *._pth
+
+
+## problems
 
 # how to accelarate import vtk time, more than 1 minute
 

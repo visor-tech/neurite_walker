@@ -8,3 +8,4 @@ tifffile
 h5py
 zarr
 SimpleITK
+requests
