@@ -1,0 +1,52 @@
+Modify: ._pth
+uncomment import site
+ref.
+https://docs.python.org/3/using/windows.html#the-embeddable-package
+https://docs.python.org/3/library/sys_path_init.html#sys-path-init
+https://docs.python.org/3/library/site.html#module-site
+https://docs.python.org/3/installing/index.html
+import path search
+https://docs.python.org/3/reference/import.html
+
+cd F:\Programs\python-3.11.6-embed-amd64
+wget https://bootstrap.pypa.io/get-pip.py
+#ref. https://github.com/pypa/get-pip
+
+# install pip
+./python.exe get-pip.py
+
+# isntall dependences
+./python.exe -m pip install -r '..\..\code\neurite_walker\requirements.txt'
+./python.exe -m pip install -r '..\..\code\SimpleVolumeViewer\requirements.txt'
+
+ref: 
+https://blog.ohidur.com/posts/python/articles/setting-up-python-embeddable-distribution/
+
+# test
+
+# how to accelarate import vtk time, more than 1 minute
+
+python -m pip install PyQt6 or 5?
+
+https://pypi.org/project/PyQt6/
+Try PyQt6 for the 'q' bug.
+
+630 MB -> 799 MB
+
+# for tkinter
+
+https://stackoverflow.com/questions/37710205/python-embeddable-zip-install-tkinter
+https://github.com/likianta/pyportable-installer/blob/master/docs/add-tkinter-to-embed-python.md
+
+AppData\Local\Programs\Python\Python311\tcl  ->  python-3.11.6-embed-amd64\tcl
+
+AppData\Local\Programs\Python\Python311\DLLs\{_tkinter.pyd tcl86t.dll tk86t.dll} -> python-3.11.6-embed-amd64\
+
+AppData\Local\Programs\Python\Python311\Lib\tkinter -> python-3.11.6-embed-amd64\Lib\site-packages
+
+matplotlib backends
+https://matplotlib.org/stable/users/explain/figure/backends.html
+
+Binding matplotlib in Qt
+
+https://matplotlib.org/stable/gallery/user_interfaces/embedding_in_qt_sgskip.html
