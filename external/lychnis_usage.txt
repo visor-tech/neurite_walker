@@ -1,0 +1,26 @@
+
+Load Project:
+
+"Y:\SIAT_SIAT\BiGuoqiang\Macaque_Brain\RM009_2\refine_sps\221122-s100-r2000-sparse\221124-s100-r2000-sparse\231010-s100-r2000\Analysis\all-in-one\export-volume-128-1.lyp"
+
+
+Import nodes:
+
+Y:\SIAT_SIAT\BiGuoqiang\Macaque_Brain\RM009_2\refine_sps\221122-s100-r2000-sparse\221124-s100-r2000-sparse\231010-s100-r2000\Analysis\all-in-one\2.1.0_new\neuron#3.lyp
+
+Y:\SIAT_SIAT\BiGuoqiang\Macaque_Brain\RM009_2\refine_sps\221122-s100-r2000-sparse\221124-s100-r2000-sparse\231010-s100-r2000\Analysis\all-in-one\2.1.0_new\neuron#7.lyp
+
+
+1. Resolution to 1um
+2. x + left click on a node
+3. space, wait...
+4. r
+5. done!
+
+
+
+$env:AZURE_RESOURCE_GROUP = ';MyTestResourceGroup2'
+
+export LychnisServerPort="29738"
+./Lychnis-1.5.8.4
+
