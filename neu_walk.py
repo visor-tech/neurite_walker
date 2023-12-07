@@ -40,6 +40,8 @@ import glob   # for list files
 import argparse
 from datetime import datetime
 import json
+import pprint
+import requests
 
 import numpy as np
 from numpy import diff, sin, cos, pi, linspace
@@ -1073,7 +1075,6 @@ class TreeCircularMIPViewer:
             print(f'(recorded, total {len(self.logger)})')
         if event.button == 1:          # event.key == 'v':
             self.fig.canvas.flush_events()
-            print('Opening Neu3DViewer...')
             nt = {
                 f'neuron#{self.neu_id}':self.ntree,
                 'smoothed': self.LocalCurveToNTree(
@@ -1081,7 +1082,10 @@ class TreeCircularMIPViewer:
                     info['cmip_local_pos'],
                     self.cmip_res * 128),
             }
-            ViewByNeu3DViewer(nt, self.image_block_path, info['interpolated_pos'])
+            ViewByLychnis(nt, self.image_block_path,
+                          info['interpolated_pos'], info)
+            #ViewByNeu3DViewer(nt, self.image_block_path,
+            #                  info['interpolated_pos'], info)
 
 def SaveSWC(fout_path, ntree, comments=''):
     with open(fout_path, 'w', encoding="utf-8") as fout:
@@ -1096,11 +1100,13 @@ def SaveSWC(fout_path, ntree, comments=''):
             fout.write('%d %d %.1f %.1f %.1f %.3f %d\n' % \
                        (nid, ty, x, y, z, di, pa))
 
-def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center, gui_3d = None):
+def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center, extra_info={}, gui_3d = None):
     """
     Open Neu3DViewer to view the swc tree and image block.
     named_ntree: named ntree in dict
     """
+    print('Opening Neu3DViewer...')
+    # save swc files and image block to a tmp directory
     tmp_dir = '.tmp/'
     if not os.path.exists(tmp_dir):
         os.mkdir(tmp_dir)
@@ -1118,6 +1124,7 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center, gui_3d = None):
     r1 = list(map(int, r_center + blk_sz/2))
     look_distance = blk_sz*3
 
+    # construct description of objects
     # see help of Neu3DViewer for possible options
     cmd_obj_desc = {
         'swc_dir' : tmp_dir,
@@ -1153,6 +1160,49 @@ def ViewByNeu3DViewer(named_ntree, zarr_dir, r_center, gui_3d = None):
         gui.Set3DCursor(r_center)
         for fn in [fn1, fn2, fn3]:
             fn(gui)
+
+def ViewByLychnis(named_ntree, zarr_dir, r_center, extra_info = {}, gui_3d = None):
+    
+    # prepare coordinates
+    blk_sz = 128
+    r_center = _a(r_center)
+    r0 = list(map(int, r_center - blk_sz/2))
+    r1 = list(map(int, r_center + blk_sz/2))
+    look_distance = blk_sz*3
+    a2s = lambda a: ' '.join(map(str, a))
+
+    # ref. Feishu doc "Lychnis HTTP服务器"
+
+    pprint.pprint(extra_info)
+    print('Connecting Lychnis...')
+
+    # get os system variable "LychnisServerPort"
+    port = os.environ.get("LychnisServerPort")
+    if port is None:
+        port = 29738
+
+    addr = f'http://127.0.0.1:{port}'
+    r = requests.post(addr)
+    print('message:')
+    print(r.text)
+    obj = json.loads(r.text)['data']
+    camera = {'fit_bounds': a2s(np.vstack((r0, r1)).T.flatten())}
+    node = {'id': extra_info['nearest_node_id']}
+    volume = {'center': a2s(r_center)}
+    channels = {'0': {'range': '200 1234'}}
+    upload_data = {
+        'camera': camera,
+        'selected_node': node,
+        'current_volume': volume,
+        'channels': channels
+    }
+    upload_obj = {'data': upload_data, 'action': 'set_params'}
+    print('send message:')
+    print(upload_obj)
+    r = requests.post(addr, json=upload_obj)
+    print(r.text)
+
+    print('Done calling Lychnis.')
 
 def get_program_options():
     parser = argparse.ArgumentParser(

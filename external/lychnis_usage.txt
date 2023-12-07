@@ -6,7 +6,7 @@ Load Project:
 
 Import nodes:
 
-Y:\SIAT_SIAT\BiGuoqiang\Macaque_Brain\RM009_2\refine_sps\221122-s100-r2000-sparse\221124-s100-r2000-sparse\231010-s100-r2000\Analysis\all-in-one\2.1.0_new\neuron#3.lyp
+Y:\SIAT_SIAT\BiGuoqiang\Macaque_Brain\RM009_2\refine_sps\221122-s100-r2000-sparse\221124-s100-r2000-sparse\231010-s100-r2000\Analysis\all-in-one\2.1.0_new\neuron#258.lyp
 
 Y:\SIAT_SIAT\BiGuoqiang\Macaque_Brain\RM009_2\refine_sps\221122-s100-r2000-sparse\221124-s100-r2000-sparse\231010-s100-r2000\Analysis\all-in-one\2.1.0_new\neuron#7.lyp
 
@@ -19,8 +19,24 @@ Y:\SIAT_SIAT\BiGuoqiang\Macaque_Brain\RM009_2\refine_sps\221122-s100-r2000-spars
 
 
 
-$env:AZURE_RESOURCE_GROUP = ';MyTestResourceGroup2'
+
+$Env:LychnisServerPort="29738"
 
 export LychnisServerPort="29738"
 ./Lychnis-1.5.8.4
 
+
+
+
+# test cmip
+PS C:\Users\xyy82\code\py\neurite_walker> python .\neu_walk.py --cmip_dir Q:\mnt\xiaoyy\dataset\RM009\cmip_swc210_res1 --zarr_dir Q:\mnt\xiaoyy\dataset\RM009\blk128_neu172_sps231010.zarr --res 1 --view Q:\mnt\xiaoyy\dataset\RM009\swc210_largest\neuron#258.lyp.swc
+
+os.path.realpath has bug (used in tifffile), so instead we do
+
+$sourcePath = "Q:\mnt\xiaoyy\dataset\RM009\cmip_swc210_res1\neuron#167_cmip_proc*.tif"
+$destinationPath = ".\cmips"
+mkdir cmips
+
+Copy-Item -Path $sourcePath -Destination $destinationPath
+
+PS C:\Users\xyy82\code\py\neurite_walker> python .\neu_walk.py --cmip_dir .\cmips --zarr_dir Q:\mnt\xiaoyy\dataset\RM009\blk128_neu172_sps231010.zarr --res 1 --view Q:\mnt\xiaoyy\dataset\RM009\swc210_largest\neuron#167.lyp.swc

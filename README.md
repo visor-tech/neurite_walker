@@ -66,3 +66,15 @@
     鼠标左键双击：跳转到fiber上的点。
     鼠标右键点击：选择fiber上的点。
 
+Bug
+---
+
+* Error: 
+    self._file = os.path.realpath(self._file)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen ntpath>", line 710, in realpath
+  File "<frozen ntpath>", line 650, in _getfinalpathname_nonstrict
+  OSError: [WinError 1005] 此卷不包含可识别的文件系统。
+  请确定所有请求的文件系统驱动程序已加载，且此卷未损坏。:
+
+  问题：os.path.realpath 指向 sshfs 时会报错。
