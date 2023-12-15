@@ -823,7 +823,8 @@ def WalkTreeCircularMIP(swc_path, image_block_path, cmip_dir, resolution):
         tifffile.imwrite(img_out_name, axon_circular_mip.T)
 
 class TreeCircularMIPViewer:
-    def __init__(self, swc_path, image_block_path, pic_path, res, view_len_str, filter_str = None):
+    def __init__(self, swc_path, image_block_path, pic_path,
+                 res, view_len_str, filter_str = None, viewer = None):
         self.swc_path = swc_path
         self.image_block_path = image_block_path
         self.pic_path = pic_path
@@ -888,6 +889,15 @@ class TreeCircularMIPViewer:
         #f_pos_path = f'neuron#{self.neu_id}_cmip_marks_{t_now_str}.json'
         f_pos_path = f'neuron#{self.neu_id}_cmip_marks.json'
         self.logger = FileLogger(f_pos_path)
+
+        # set viewer
+        if viewer is None:
+            viewer = 'neu3dviewer'
+        viewer_map = {
+            'neu3dviewer': ViewByNeu3DViewer,
+            'lychnis': ViewByLychnis,
+        }
+        self.viewer = viewer_map[viewer]
     
     def cmip_pos_to_coordinate(self, cmip_pos):
         # get position in terms of process id (id_proc) and path distance to starting point (local_pos)
@@ -1082,10 +1092,8 @@ class TreeCircularMIPViewer:
                     info['cmip_local_pos'],
                     self.cmip_res * 128),
             }
-            ViewByLychnis(nt, self.image_block_path,
+            self.viewer(nt, self.image_block_path,
                           info['interpolated_pos'], info)
-            #ViewByNeu3DViewer(nt, self.image_block_path,
-            #                  info['interpolated_pos'], info)
 
 def SaveSWC(fout_path, ntree, comments=''):
     with open(fout_path, 'w', encoding="utf-8") as fout:
@@ -1225,6 +1233,10 @@ def get_program_options():
                         string for filtering the processes.
                         Example: '(branch_depth(processes)<=3) & (path_length_to_root(end_point(processes))>10000)' 
                         """)
+    parser.add_argument('--viewer',
+                        choices=['lychnis', 'neu3dviewer'],
+                        default='neu3dviewer',
+                        help='Set viewer fot 3D view, "lychnis" or "neu3dviewer".')
     parser.add_argument('--test',
                         help='Test mode, not for general use.')
     parser.add_argument('--config_path',
@@ -1332,7 +1344,7 @@ if __name__ == '__main__':
         for swc_path in s_swc_path:
             cmip_viewer = TreeCircularMIPViewer(
                 swc_path, img_block_path, args.cmip_dir,
-                args.res, args.view_length, args.filter)
+                args.res, args.view_length, args.filter, args.viewer)
             cmip_viewer.ConstructCMIP(0)
             plt.show()
     else:
