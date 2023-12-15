@@ -14,6 +14,11 @@ Steps to generate a batch of CMIP
       cd /mnt/xiaoyy/dataset/RM009/
       mv 2.1.0_swc_largest swc210_largest    # different name convension
 
+  * or, directly on Cluster:
+      ssh xiaoyy@mn02
+      cd /share/data/VISoR_Reconstruction/SIAT_SIAT/BiGuoqiang/Macaque_Brain/RM009_2/refine_sps/221122-s100-r2000-sparse/221124-s100-r2000-sparse/231010-s100-r2000/Analysis/all-in-one/2.1.0_new/
+      python3 ~/code/fiber-inspector/lyp_to_swc.py --export_largest_only --output_directory ~/dataset/RM009/swc210n_largest/ *.lyp
+
 
 ## Get image blocks around the SWC (neurons)
 
