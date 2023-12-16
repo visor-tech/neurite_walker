@@ -2,7 +2,7 @@
 
 ## Before run:
 # * Prepare a directory named "pic_tmp" to hold output cMIP images
-# * Put external dependencies in directory "external", such as external/neu3dviewer
+# * Put external dependencies in directory "external", such as external/SimpleVolumeViewer
 # * See requirements.txt for required python packages.
 # * need python3.11 or higher
 
@@ -74,7 +74,10 @@ from neu3dviewer.data_loader import (
     SimplifyTreeWithDepth,
     OnDemandVolumeLoader
 )
-from neu3dviewer.utils import ArrayfyList
+from neu3dviewer.utils import (
+    ArrayfyList,
+    img_basic_stat,
+)
 
 # utility functions
 _a  = lambda x: np.array(x, dtype=np.float64)
@@ -1179,6 +1182,10 @@ def ViewByLychnis(named_ntree, zarr_dir, r_center, extra_info = {}, gui_3d = Non
     look_distance = blk_sz*3
     a2s = lambda a: ' '.join(map(str, a))
 
+    # auto brightness
+    img_data = zarr.open(zarr_dir, mode='r')[r0[0]:r1[0], r0[1]:r1[1], r0[2]:r1[2]]
+    stat = img_basic_stat(img_data)
+
     # ref. Feishu doc "Lychnis HTTP服务器"
 
     pprint.pprint(extra_info)
@@ -1197,7 +1204,7 @@ def ViewByLychnis(named_ntree, zarr_dir, r_center, extra_info = {}, gui_3d = Non
     camera = {'fit_bounds': a2s(np.vstack((r0, r1)).T.flatten())}
     node = {'id': extra_info['nearest_node_id']}
     volume = {'center': a2s(r_center)}
-    channels = {'0': {'range': '200 1234'}}
+    channels = {'0': {'range': f"{stat['q0.001']} {stat['q0.999']}"}}
     upload_data = {
         'camera': camera,
         'selected_node': node,

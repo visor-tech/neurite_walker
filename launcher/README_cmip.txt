@@ -6,7 +6,7 @@ v2023-12-14
 运行U盘版本（Windows）
 --------------------
 
-双击 cmip_viewer.bat，根据提示输入要检查的神经元编号，即进入主检查界面。
+1. 双击 cmip_viewer.bat，根据提示输入要检查的神经元编号，即进入主检查界面，同时Lychnis也会被启动。
 第一次启动可能需要一些时间（数秒到一分钟）。
 
 已知Bug：
@@ -79,6 +79,25 @@ v2023-12-14
     滚轮     ：缩放。
     左键双击 ：跳转到指针附近fiber上的节点。
     右键点击 ：选择fiber上的点，查看信息。
+
+
+手动启动 Lychnis
+---------------
+
+打开Lychnis并载入同一个神经元。
+
+命令行指定端口（Powershell）
+$Env:LychnisServerPort="29738"
+启动
+./Lychnis-1.5.8.8
+参考文件路径：
+图像
+Load Project:
+Y:\SIAT_SIAT\BiGuoqiang\Macaque_Brain\RM009_2\refine_sps\221122-s100-r2000-sparse\221124-s100-r2000-sparse\231010-s100-r2000\Analysis\all-in-one\export-volume-128-1.lyp
+神经元*.lyp
+Import nodes:
+Y:\SIAT_SIAT\BiGuoqiang\Macaque_Brain\RM009_2\refine_sps\221122-s100-r2000-sparse\221124-s100-r2000-sparse\231010-s100-r2000\Analysis\all-in-one\2.1.0_new\
+调整视图至最高分辨率。
 
 
 
