@@ -901,6 +901,8 @@ class TreeCircularMIPViewer:
             'lychnis': ViewByLychnis,
         }
         self.viewer = viewer_map[viewer]
+        self.viewer_alternative = list(viewer_map.values())\
+            [(list(viewer_map.keys()).index(viewer) + 1) % len(viewer_map)]
     
     def cmip_pos_to_coordinate(self, cmip_pos):
         # get position in terms of process id (id_proc) and path distance to starting point (local_pos)
@@ -1095,8 +1097,13 @@ class TreeCircularMIPViewer:
                     info['cmip_local_pos'],
                     self.cmip_res * 128),
             }
-            self.viewer(nt, self.image_block_path,
-                          info['interpolated_pos'], info)
+            # call viewer or alternative viewer if shift is pressed
+            if event.key == 'shift':
+                self.viewer_alternative(nt, self.image_block_path,
+                                        info['interpolated_pos'], info)
+            else:
+                self.viewer(nt, self.image_block_path,
+                            info['interpolated_pos'], info)
 
 def SaveSWC(fout_path, ntree, comments=''):
     with open(fout_path, 'w', encoding="utf-8") as fout:
@@ -1203,7 +1210,12 @@ def ViewByLychnis(named_ntree, zarr_dir, r_center, extra_info = {}, gui_3d = Non
     obj = json.loads(r.text)['data']
     camera = {'fit_bounds': a2s(np.vstack((r0, r1)).T.flatten())}
     node = {'id': extra_info['nearest_node_id']}
-    volume = {'center': a2s(r_center)}
+    volume = {
+        'center': a2s(r_center),
+        'resolution_index': 0,    # TODO: not work
+        'spacing': '1 1 1',       # TODO: not work
+        'size': '256 256 256'     # TODO: not work
+    }
     channels = {'0': {'range': f"{stat['q0.001']} {stat['q0.999']}"}}
     upload_data = {
         'camera': camera,
