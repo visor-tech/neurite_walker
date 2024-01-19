@@ -638,7 +638,7 @@ class NTreeOps:
     def branch_depth(self, node_id):
         """
         Return the branch depth of the node (ID).
-        Demo tree (0 is the root):
+        Demo tree with node IDs (0 is the root):
         0 -- 1 -- 2 -- 3
               \
                4
@@ -661,7 +661,7 @@ class NTreeOps:
 
     def end_point(self, processes):
         """
-        Return the end point of the processes.
+        Return the end point ID of the processes.
         """
         return self.map_idx_id[_ai([p[-1] for p in processes])]
 
