@@ -1018,55 +1018,86 @@ class TreeCircularMIPViewer:
         self.screen_size = screen_size
         self.n_screen_row = n_screen_rows
 
+    def cmip_show_seek(self, pos_offset, pos_origin_st):
+        # select begin position
+        if pos_origin_st.lower() == 'cur':
+            pos0 = self.last_pos0
+        elif pos_origin_st.lower() == 'end':
+            pos0 = self.row_idxs[-1]
+        elif pos_origin_st.lower() in ('begin', 'set'):
+            pos0 = 0
+        # preset steps
+        row_step = int(self.screen_size / self.n_screen_row)
+        if pos_offset == 'next_line':
+            step = row_step
+        elif pos_offset == 'previous_line':
+            step = -row_step
+        elif pos_offset == 'next_page':
+            step = self.screen_size
+        elif pos_offset == 'previous_page':
+            step = -self.screen_size
+        else:
+            # assume pos_offset is a number
+            step = pos_offset
+        # clip position after step
+        if pos0 + step < 0:
+            step = -pos0
+        if pos0 + step > self.row_idxs[-1] - row_step:
+            step = 0
+        # more the showing position
+        self.ConstructCMIP(pos0 + step)
+
     def on_cmip_key(self, event):
         print('key pressed:', event.key)
+        # keys about movement
         if event.key == 'pagedown':
-            self.ConstructCMIP(self.last_pos0 + self.screen_size)
-            #plt.show()
+            self.cmip_show_seek('next_page', 'cur')
             self.fig.canvas.draw()
         elif event.key == 'pageup':
-            if self.last_pos0 >= int(self.screen_size/2):
-                self.ConstructCMIP(self.last_pos0 - self.screen_size)
-            #plt.show()
+            self.cmip_show_seek('previous_page', 'cur')
             self.fig.canvas.draw()
-        if event.key == ' ':
-            self.ConstructCMIP(self.last_pos0 + int(self.screen_size/2))
-            #plt.show()
+        elif event.key == ' ':
+            self.cmip_show_seek('next_line', 'cur')
             self.fig.canvas.draw()
-        if event.key == 'home':
-            self.ConstructCMIP(0)
-            #plt.show()
+        elif event.key == 'home':
+            self.cmip_show_seek(0, 'begin')
             self.fig.canvas.draw()
-        if event.key == 'end':
-            self.ConstructCMIP(self.row_idxs[-1] - self.screen_size)
-            #plt.show()
+        elif event.key == 'end':
+            self.cmip_show_seek('previous_page', 'end')
             self.fig.canvas.draw()
-        elif event.key == '*':
-            self.screen_img_gamma += 0.5
-            self.ConstructCMIP(self.last_pos0)
-            #plt.show()
+        elif event.key == 'w':
+            self.cmip_show_seek('previous_line', 'cur')
             self.fig.canvas.draw()
-        elif event.key == '/':
-            self.screen_img_gamma = max(self.screen_img_gamma - 0.5, 0.5)
-            self.ConstructCMIP(self.last_pos0)
-            #plt.show()
+        elif event.key == 's':
+            self.cmip_show_seek('next_line', 'cur')
             self.fig.canvas.draw()
+        # keys about markers
         elif event.key == 'z':
             # revoke last clicked position
             if len(self.logger) > 0:
                 self.logger.Pop()
-                self.ConstructCMIP(self.last_pos0)
+                self.cmip_show_seek(self.last_pos0)
                 self.fig.canvas.draw()
                 print(f'(revoked, total {len(self.logger)})')
+        # keys about images
+        elif event.key == '*':
+            self.screen_img_gamma += 0.5
+            self.cmip_show_seek(self.last_pos0)
+            #plt.show()
+            self.fig.canvas.draw()
+        elif event.key == '/':
+            self.screen_img_gamma = max(self.screen_img_gamma - 0.5, 0.5)
+            self.cmip_show_seek(self.last_pos0)
+            #plt.show()
+            self.fig.canvas.draw()
 
     def on_cmip_scroll(self, event):
-        #print(event.button, event.step)
-        step = int(self.screen_size / self.n_screen_row)
+        #print(event.button, event.row_step)
+        row_step = int(self.screen_size / self.n_screen_row)
         if event.button == 'up':
-            if self.last_pos0 > step/2:
-                self.ConstructCMIP(self.last_pos0 - step)
+            self.cmip_show_seek('previous_line', 'cur')
         else:
-            self.ConstructCMIP(self.last_pos0 + step)
+            self.cmip_show_seek('next_line', 'cur')
         self.fig.canvas.draw()
 
     def on_cmip_mouse(self, event):
