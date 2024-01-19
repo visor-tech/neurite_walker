@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 ## Before run:
-# * Prepare a directory named "pic_tmp" to hold output cMIP images
-# * Put external dependencies in directory "external", such as external/SimpleVolumeViewer
+# * Prepare a directory to hold output cMIP images, named "pic_tmp" by default.
+# * Put external dependencies in the directory "external", such as external/SimpleVolumeViewer
 # * See requirements.txt for required python packages.
 # * need python3.11 or higher
 
@@ -56,6 +56,7 @@ import SimpleITK as sitk
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import xlabel, ylabel, title, figure
 
+# override default key mapings
 plt.rcParams['keymap.save'] = ['ctrl+s']
 plt.rcParams['keymap.quit'] = ['ctrl+w', 'cmd+w']
 
@@ -64,8 +65,12 @@ _basedir = os.path.dirname(os.path.abspath(__file__))
 _extdir  = os.path.join(_basedir, 'external', 'SimpleVolumeViewer')
 if os.path.isdir(_extdir):
     sys.path.insert(0, _extdir)
+else:
+    _extdir  = os.path.join(_basedir, '..', 'SimpleVolumeViewer')
+    if os.path.isdir(_extdir):
+        sys.path.insert(0, _extdir)
 
-# we need some helper functions from neu3dviewer
+# import 3D viewer and some helper functions from neu3dviewer
 import neu3dviewer
 from neu3dviewer.img_block_viewer import GUIControl
 from neu3dviewer.data_loader import (
@@ -97,8 +102,8 @@ def f_l_gamma(a, g):
 
 def _idx_blk(p, b):
     q = p + b   # if p is np.array, b can be a number or an array
-    return (slice(int(p[k]), int(q[k]))
-            for k in range(len(p)))
+    return tuple(slice(int(p[k]), int(q[k]))
+                 for k in range(len(p)))
     #return (slice(int(p[0]), int(q[0])),
     #        slice(int(p[1]), int(q[1])),
     #        slice(int(p[2]), int(q[2])))
@@ -173,7 +178,7 @@ def Test3dImageSlicing():
 def SliceZarrImage(zarr_image, blk_sz, p_center, vec_normal, vec_up):
     blk_sz = 128
     p0 = p_center - blk_sz/2
-    img3d = zarr_image[*_idx_blk(p0, blk_sz)]
+    img3d = zarr_image[_idx_blk(p0, blk_sz)]
     #print('idx =', tuple(_idx_blk(p_center - blk_sz/2, blk_sz)))
     #print('maxmin =', np.max(img3d), np.min(img3d))
     #print('p_center =', p_center)
@@ -243,8 +248,8 @@ def ExamBigImageContinuity():
     p_corner = np.floor(p0 / 128) * 128
     img_block_path = '/mnt/xiaoyy/dataset/zarrblock'
     imgz = zarr.open(img_block_path, mode='r')
-    idf_pb = lambda p, b: (slice(int(p[i]), int(p[i] + b[i]))
-                            for i in range(3))
+    idf_pb = lambda p, b: tuple(slice(int(p[i]), int(p[i] + b[i]))
+                                for i in range(3))
     block_size = _a([128, 128, 128])
 
     ## test direction of imshow
@@ -267,10 +272,10 @@ def ExamBigImageContinuity():
     ## test zarr
 
     # consider (x,y,z)
-    img3d000 = imgz[*idf_pb(p_corner + _a([0,   0,   0]), block_size)]
-    img3d010 = imgz[*idf_pb(p_corner + _a([0, 128,   0]), block_size)]
-    img3d001 = imgz[*idf_pb(p_corner + _a([0,   0, 128]), block_size)]
-    img3d011 = imgz[*idf_pb(p_corner + _a([0, 128, 128]), block_size)]
+    img3d000 = imgz[idf_pb(p_corner + _a([0,   0,   0]), block_size)]
+    img3d010 = imgz[idf_pb(p_corner + _a([0, 128,   0]), block_size)]
+    img3d001 = imgz[idf_pb(p_corner + _a([0,   0, 128]), block_size)]
+    img3d011 = imgz[idf_pb(p_corner + _a([0, 128, 128]), block_size)]
 
     figure(112)
     imgshow(img3d000.max(axis=0).T)
@@ -278,10 +283,10 @@ def ExamBigImageContinuity():
     ylabel('z')
 
     # consider (z,y,x)
-    img3d000 = imgz[*idf_pb(p_corner + _a([0,   0,   0]), block_size)]
-    img3d010 = imgz[*idf_pb(p_corner + _a([0, 128,   0]), block_size)]
-    img3d001 = imgz[*idf_pb(p_corner + _a([0,   0, 128]), block_size)]
-    img3d011 = imgz[*idf_pb(p_corner + _a([0, 128, 128]), block_size)]
+    img3d000 = imgz[idf_pb(p_corner + _a([0,   0,   0]), block_size)]
+    img3d010 = imgz[idf_pb(p_corner + _a([0, 128,   0]), block_size)]
+    img3d001 = imgz[idf_pb(p_corner + _a([0,   0, 128]), block_size)]
+    img3d011 = imgz[idf_pb(p_corner + _a([0, 128, 128]), block_size)]
 
     # MIP along x
     figure(130)
@@ -311,10 +316,10 @@ def ExamBigImageContinuity():
     # trying the plan that transpose the local array
     # convert to (x,y,z) order
     img3dfull = np.zeros((128,256,256), dtype=np.uint16)
-    img3dfull[*idf_pb(_a([0,   0,   0]), block_size)] = img3d000.transpose()
-    img3dfull[*idf_pb(_a([0,   0, 128]), block_size)] = img3d001.transpose()
-    img3dfull[*idf_pb(_a([0, 128,   0]), block_size)] = img3d010.transpose()
-    img3dfull[*idf_pb(_a([0, 128, 128]), block_size)] = img3d011.transpose()
+    img3dfull[idf_pb(_a([0,   0,   0]), block_size)] = img3d000.transpose()
+    img3dfull[idf_pb(_a([0,   0, 128]), block_size)] = img3d001.transpose()
+    img3dfull[idf_pb(_a([0, 128,   0]), block_size)] = img3d010.transpose()
+    img3dfull[idf_pb(_a([0, 128, 128]), block_size)] = img3d011.transpose()
     figure(134)
     imgshow(f_l_gamma(img3dfull.max(axis=0).T, 3.0))
     xlabel('y')
@@ -326,7 +331,7 @@ def ExamBigImageContinuity():
     # in .zarray
     #"order": "C",
     imgshow(f_l_gamma(
-        imgz[*idf_pb(p_corner, (128, 256, 256))] \
+        imgz[idf_pb(p_corner, (128, 256, 256))] \
         .max(axis=0).T, 3.0))
     xlabel('y')
     ylabel('z')
@@ -367,11 +372,11 @@ def WalkTreeTangent(swc_path, image_block_path, node_idx):
 
     p_img_corner = p_img_center - _a(desired_block_size) / 2
 
-    idx_rg = [slice(int(p_img_corner[i]),
-                    int(p_img_corner[i] + desired_block_size[i]))
-              for i in range(3)]
+    idx_rg = tuple(slice(int(p_img_corner[i]),
+                         int(p_img_corner[i] + desired_block_size[i]))
+                for i in range(3))
 
-    img3d = imgz[*idx_rg]
+    img3d = imgz[idx_rg]
 
     print("p_img_center", p_img_center)
     print("p_img_corner", p_img_corner)
@@ -688,11 +693,11 @@ def test_ntreeops():
     true_pairs = [(7, 6), (6, 7), (8, 0), (12, 13)]
     false_pairs = [(1,1), (13, 14), (1, 3)]
     for pr in true_pairs:
-        idx_pr = ntrop.map_id_idx[_ai(pr)]
-        assert(ntrop.ngraph[*idx_pr] == True)
+        idx_pr = tuple(ntrop.map_id_idx[_ai(pr)])   # TODO: make the syntax more friendly
+        assert(ntrop.ngraph[idx_pr] == True)
     for pr in false_pairs:
-        idx_pr = ntrop.map_id_idx[_ai(pr)]
-        assert(ntrop.ngraph[*idx_pr] == False)
+        idx_pr = tuple(ntrop.map_id_idx[_ai(pr)])
+        assert(ntrop.ngraph[idx_pr] == False)
     # test depth
     ans = np.array([
        [11,  0,  0],
