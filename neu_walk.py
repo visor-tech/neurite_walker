@@ -603,6 +603,8 @@ class NTreeOps:
         # get the graph of the tree
         self.ngraph = GetUndirectedGraph(self.ntree)
         self.build_tree_depth()
+        self.leaves = self.end_point(self.processes)
+        self.swc_path = swc_path
     
     def build_tree_depth(self):
         # find roots
@@ -670,6 +672,9 @@ class NTreeOps:
         """
         return self.map_idx_id[_ai([p[-1] for p in processes])]
 
+    def position_of_node(self, node_id):
+        return self.ntree[1][self.map_id_idx[node_id], :3]
+
     def path_length_to_root(self, node_id):
         # TODO: check id validity
         return self.node_root_path_length[self.map_id_idx[node_id]]
@@ -734,13 +739,17 @@ def exec_filter_string(filter_str, ntrop):
     if (filter_str is None) or (filter_str == ''):
         return np.ones(len(ntrop.processes), dtype=bool)
     local_vars = {
+        # processes related
         'processes': ntrop.processes,
         'branch_depth': ntrop.branch_depth,
-        'path_length_to_root': ntrop.path_length_to_root,
         'end_point': ntrop.end_point,
+        # nodes related
+        'leaves': ntrop.leaves,
+        'path_length_to_root': ntrop.path_length_to_root,
+        'position_of_node': ntrop.position_of_node,
         # additional
         'ntrop': ntrop,
-        'swc_path': swc_path,
+        'swc_path': ntrop.swc_path,
         'np' : np,
     }
     vec_filted = eval(filter_str, {}, local_vars)
