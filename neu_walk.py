@@ -657,7 +657,7 @@ class NTreeOps:
           4     :   2
         """
         # TODO: check id validity
-        if isinstance(node_id, int) or isinstance(node_id[0], int):
+        if isinstance(node_id, int) or isinstance(node_id[0], (int, np.int32)):
             return self.v_branch_depth[self.map_id_idx[node_id]]
         else:
             # assume list or array, i.e. node_id is processes
