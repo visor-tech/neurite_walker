@@ -794,23 +794,39 @@ class FileLogger:
             with open(file_path, 'r', encoding='utf-8') as fin:
                 self.logs = json.load(fin)
         else:
-            self.logs = []
+            self.logs = [
+                {
+                    'viewed_pos_um': 0
+                }
+            ]
     
     def __len__(self):
         return len(self.logs)
     
     def clicked_pos_um(self):
-        return [log['clicked_pos_um'] for log in self.logs]
+        return [log['clicked_pos_um']
+                for log in self.logs
+                if 'clicked_pos_um' in log]
+    
+    def viewed_pos_um(self):
+        return self.log['viewed_pos_um']
+    
+    def viewed_pos_um_update(self, viewed_um):
+        self.log['viewed_pos_um'] = viewed_um
     
     def Append(self, item):
         self.logs.append(item)
-        with open(self.file_path, 'w', encoding='utf-8') as fout:
-            json.dump(self.logs, fout, indent=4)
+        self.save()
     
     def Pop(self):
         self.logs.pop()
+        self.save()
+    
+    def save(self):
         with open(self.file_path, 'w', encoding='utf-8') as fout:
             json.dump(self.logs, fout, indent=4)
+
+
 
 def WalkTreeCircularMIP(swc_path, image_block_path, cmip_dir, resolution):
     # get an ordered and continuous node index tree and its graph
